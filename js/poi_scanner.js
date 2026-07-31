@@ -29,7 +29,10 @@ const MAX_SCAN_CYCLES = 10;
 const ORIGINAL_BIOME_SPAWNS = new Set([
     'spawn_heart',
     'spawn_chest',
-    'spawn_items',
+    //'spawn_items', // This was a mistake. Understandable, honestly, since this has a very misleading name, but it's actually for the wand altar pixel scene
+    // Instead, these two needed to be included
+    'spawn_wands',
+    'spawn_potions',
 ]);
 
 // Convert a world position to the wang tile pixel's scan point (increments of 10 pixels).
@@ -362,9 +365,17 @@ export function scanSpawnFunctions(biomeData, tileSpawns, worldSeed, ngPlusCount
             const srcFn = (BIOME_SPAWN_FUNCTION_MAP[spawn.sourceBiome] || [])[spawn.spawnFunctionIndex];
             const srcFnName = srcFn ? srcFn.funcName : null;
             if (spawn.fromPixelScene) {
-                // Pixel-scene-internal spawns resolve their biome through the wobbled chunk lookup.
-                const target = getBiomeAtWorldCoordinates(biomeData, spawn.x, spawn.y, ngPlusCount > 0, gameMode, true);
-                targetBiome = target ? target.biome : null;
+                // Is this the right exception?
+                if (ORIGINAL_BIOME_SPAWNS.has(srcFnName)) {
+                    // Seems that this original spawn exception needs to be kept for pixel scene spawns?
+                    // At least this applies to wand and potion altars, unclear whether it also applies to nested pixel scene stuff in biome overlaps
+                    targetBiome = spawn.sourceBiome;
+                }
+                else {
+                    // Pixel-scene-internal spawns resolve their biome through the wobbled chunk lookup.
+                    const target = getBiomeAtWorldCoordinates(biomeData, spawn.x, spawn.y, ngPlusCount > 0, gameMode, true);
+                    targetBiome = target ? target.biome : null;
+                }
             } else if (ORIGINAL_BIOME_SPAWNS.has(srcFnName)) {
                 // Exception spawn functions that use their original biome
                 const resolved = getResolvedBiome(biomeData, spawn.x, spawn.y, ngPlusCount > 0, gameMode);

@@ -17,7 +17,9 @@ import { appSettings } from './settings.js';
 
 // Only these spawn functions are remapped through the wobbled biome after applying edge noise.
 // TODO: Are there any others missing?
-const WOBBLE_REMAP_FUNCS = new Set(['spawn_potions', 'spawn_wands', 'spawn_wand']);
+//const WOBBLE_REMAP_FUNCS = new Set(['spawn_potions', 'spawn_wands', 'spawn_wand']);
+// Testing without this, seems to work better.
+const WOBBLE_REMAP_FUNCS = new Set([]);
 
 const BIOME_TIERS = {
 	'coalmine': 1,

@@ -1126,12 +1126,15 @@ export const app = {
 		const wx = (e.clientX - rect.left - this.canvas.width / 2) / this.cam.z + this.cam.x;
 		const wy = (e.clientY - rect.top - this.canvas.height / 2) / this.cam.z + this.cam.y;
 
-		const [mousePWX, mousePWY] = getPWIndices(wx, wy, this.pw, this.pwVertical, this.isNGP, this.gameMode);
+		// Incidentally, don't need to compute this anymore...
+		//const [mousePWX, mousePWY] = getPWIndices(wx, wy, this.pw, this.pwVertical, this.isNGP, this.gameMode);
 		// Check cached PoIs for the current Parallel World
 		for (const worldKey of this.worldsInView) {
 			// Add a quick bounds check before doing the more expensive distance calculation
 			const [pwX, pwY] = worldKey.split(',').map(Number);
-			if (mousePWX !== pwX || mousePWY !== pwY) continue;
+			// Fix for the very edge case bug in NG+/nightmare where the shift can cause biomes to move into the adjacent PW
+			// Not a great fix, since it makes it a bit less efficient...
+			//if (mousePWX !== pwX || mousePWY !== pwY) continue;
 
 			const shiftX = pwX * 512 * this.w - this.pw * 512 * this.w;
 			const shiftY = pwY * 24576 - this.pwVertical * 24576;
