@@ -137,6 +137,48 @@
         }
         .spell-icon { width: 32px; height: 32px; position: absolute; top: 2px; left: 2px; image-rendering: pixelated; }
 
+        #progress-overlay {
+            position: absolute;
+            inset: 24px;
+            z-index: 150;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            background: rgba(10, 10, 10, 0.97);
+            border: 2px solid #dca44b;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            color: #eee;
+            text-align: left;
+        }
+
+        .progress-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #444;
+        }
+
+        .progress-header h2 { margin: 0; color: #dca44b; font-size: 18px; }
+        .progress-controls { display: flex; align-items: center; gap: 12px; }
+        .progress-controls label { display: flex; align-items: center; gap: 5px; font-size: 13px; }
+        .progress-close { width: 28px; height: 28px; padding: 0; font-size: 18px; line-height: 1; }
+
+        #progress-lists { display: grid; grid-template-columns: repeat(3, max-content); gap: 16px; overflow: auto; padding: 12px; }
+        .progress-section { margin-bottom: 18px; }
+        .progress-section h3 { margin: 0 0 8px; color: #dca44b; font-size: 15px; }
+        .progress-grid { display: grid; gap: 4px; }
+        .progress-section[data-category="perks"] .progress-grid,
+        .progress-section[data-category="enemies"] .progress-grid { grid-template-columns: repeat(9, 36px); }
+        .progress-section[data-category="spells"] .progress-grid { grid-template-columns: repeat(12, 36px); }
+        .progress-card { width: 36px; height: 36px; position: relative; border: 0; padding: 0; background: transparent; }
+        .progress-card .slot { position: absolute; inset: 0; }
+        .progress-card .spell-icon { transition: filter 0.1s ease-in-out; }
+        .progress-card.complete .slot { box-shadow: inset 0 0 0 1px #dca44b; }
+        .progress-card.missing .slot { box-shadow: inset 0 0 0 3px #c94b4b; }
+        .progress-card:hover .spell-icon { filter: brightness(1.25); }
+
         /* PW Input Styling */
         .pw-controls { display: flex; align-items: center; gap: 5px; }
         .pw-controls input { text-align: center; }
@@ -964,6 +1006,10 @@
                 <input type="file" id="unlock-folder-picker" webkitdirectory directory multiple style="display:none;">
                 <button onclick="document.getElementById('unlock-folder-picker').click()" title="Navigate to %appdata%/../LocalLow/Nolla_Games_Noita/save00/persistent and upload the entire flags folder to sync your unlocked spells">Upload Flags Folder</button>
             </div>
+            <br>
+            <div id="progress-view">
+                <button id="progress-button">View Progress</button>
+            </div>
         </div>
 
         <div id="perks-ui-container" style="font-weight:bold; font-size:14px; margin-bottom:5px; border-top:1px solid #444;">
@@ -1117,6 +1163,16 @@
             <h3>Remember to check your unlocks!</h3>
             <h5>Hämis 👍</h5>
         </div> 
+        <div id="progress-overlay" role="dialog" aria-modal="true" aria-labelledby="progress-title">
+            <div class="progress-header">
+                <h2 id="progress-title">Progress</h2>
+                <div class="progress-controls">
+                    <label><input id="progress-show-missing" type="checkbox"> Show missing</label>
+                    <button id="progress-close" class="progress-close" title="Close progress view" aria-label="Close progress view">&times;</button>
+                </div>
+            </div>
+            <div id="progress-lists"></div>
+        </div>
     </div>
 
     <script type="module" src="./js/app.js"></script>

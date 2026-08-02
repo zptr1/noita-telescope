@@ -17,16 +17,18 @@ import { debugBiomeEdgeNoise } from './edge_noise.js';
 import { getPixelSceneCanvas, loadPixelSceneData, reloadPixelSceneCache, PIXEL_SCENE_DATA } from './pixel_scene_generation.js';
 import { addStaticPixelScenes } from './static_spawns.js';
 import { NollaPrng } from './nolla_prng.js';
-import { appSettings, updateSettings } from './settings.js';
+import { appSettings, updateSettings, updateSpellFlags } from './settings.js';
 import { syncWorldWorkerData, getOrGenerateWorld, syncSettingsToWorldWorker } from './world_manager.js';
 import { syncOverlayWorkerData, getOrGenerateOverlay, syncSettingsToOverlayWorker, recolorPixelScenes, isOverlayPending, invalidatePendingOverlays } from './overlay_manager.js';
 import { getBiomeModifiers, getStartingWeather } from './misc_generation.js';
 import { getCauldronState, getCauldronVariation } from './cauldron.js';
 import { WAND_TIERS } from './wand_config.js';
 import { renderFungalShifts, renderAlchemyRecipes, updatePerksState } from './misc_ui.js';
+import { setupProgressUI, updateUsedSpellProgress } from './progress.js';
 import { renderStars } from './star_decorations.js';
 import { getFungalShifts } from './fungal_shifts.js';
 import { pickAlchemyMaterials } from './alchemy.js';
+
 
 export const app = {
 	// TODO: A lot of these are old and unused and could probably be cleaned up
@@ -483,6 +485,76 @@ export const app = {
 			performSearch(true, false);
 		};
 
+		setupProgressUI((searchTerm, category) => {
+			document.getElementById('progress-overlay').style.display = 'none';
+			if (category === 'enemies' && !document.getElementById('show-enemy-spawns').checked) {
+				alert('Hämis says: Enemy spawns are disabled. Enable the "Show Enemy Spawns" debug setting before searching for enemies.');
+				const enemySpawnsCheckbox = document.getElementById('show-enemy-spawns');
+				enemySpawnsCheckbox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+				enemySpawnsCheckbox.focus();
+				return;
+			}
+			let finalSearchTerm = searchTerm;
+			if (category === 'enemies') {
+				// Exceptions, probably many that are needed but I'm lazy
+				// Actually this one doesn't work anyway because it's a wand name modifier and not an item name, and the associated enemy isn't included as a separate spawn
+				//if (searchTerm === 'wand_ghost') finalSearchTerm = 'taikasauva';
+				if (searchTerm === 'player') finalSearchTerm = 'starting loadout';
+				if (searchTerm === 'sheep') finalSearchTerm = 'normal sheep';
+				if (searchTerm === 'fish') finalSearchTerm = 'normal fish';
+				if (searchTerm === 'duck') finalSearchTerm = 'normal duck';
+				if (searchTerm === 'deer') finalSearchTerm = 'normal deer';
+				if (searchTerm === 'zombie') finalSearchTerm = 'normal zombie';
+				if (searchTerm === 'miner') finalSearchTerm = 'normal miner';
+				if (searchTerm === 'shotgunner') finalSearchTerm = 'normal shotgunner';
+				if (searchTerm === 'alchemist') finalSearchTerm = 'normal alchemist';
+				if (searchTerm === 'slimeshooter') finalSearchTerm = 'normal slimeshooter';
+				if (searchTerm === 'acidshooter') finalSearchTerm = 'normal acidshooter';
+				if (searchTerm === 'bigzombie') finalSearchTerm = 'normal bigzombie';
+				if (searchTerm === 'giantshooter') finalSearchTerm = 'normal giantshooter';
+				if (searchTerm === 'blob') finalSearchTerm = 'normal blob';
+				if (searchTerm === 'rat') finalSearchTerm = 'normal rat';
+				if (searchTerm === 'bat') finalSearchTerm = 'normal bat';
+				if (searchTerm === 'firebug') finalSearchTerm = 'normal firebug';
+				if (searchTerm === 'fly') finalSearchTerm = 'normal fly';
+				if (searchTerm === 'frog') finalSearchTerm = 'normal frog';
+				if (searchTerm === 'fungus') finalSearchTerm = 'normal fungus';
+				if (searchTerm === 'tentacler') finalSearchTerm = 'normal tentacler';
+				if (searchTerm === 'lukki') finalSearchTerm = 'normal lukki';
+				if (searchTerm === 'worm') finalSearchTerm = 'normal worm';
+				if (searchTerm === 'roboguard') finalSearchTerm = 'normal roboguard';
+				if (searchTerm === 'tank') finalSearchTerm = 'normal tank';
+				if (searchTerm === 'necrobot') finalSearchTerm = 'normal necrobot';
+				if (searchTerm === 'firemage') finalSearchTerm = 'normal firemage';
+				if (searchTerm === 'thundermage') finalSearchTerm = 'normal thundermage';
+				if (searchTerm === 'wraith') finalSearchTerm = 'normal wraith';
+				if (searchTerm === 'statue') finalSearchTerm = 'normal statue';
+				if (searchTerm === 'ghost') finalSearchTerm = 'normal ghost';
+				if (searchTerm === 'gazer') finalSearchTerm = 'normal gazer';
+				if (searchTerm === 'crystal_physics') finalSearchTerm = 'normal crystal_physics';
+				if (searchTerm === 'sniper') finalSearchTerm = 'normal sniper';
+				if (searchTerm === 'boss_dragon') finalSearchTerm = 'dragon';
+				if (searchTerm === 'boss_limbs') finalSearchTerm = 'pyramid boss';
+				if (searchTerm === 'boss_alchemist') finalSearchTerm = 'alchemist boss';
+				if (searchTerm === 'gate_monster_a') finalSearchTerm = 'triangle boss';
+				if (searchTerm === 'gate_monster_b') finalSearchTerm = 'triangle boss';
+				if (searchTerm === 'gate_monster_c') finalSearchTerm = 'triangle boss';
+				if (searchTerm === 'gate_monster_d') finalSearchTerm = 'triangle boss';
+				if (searchTerm === 'chest_leggy') finalSearchTerm = 'leggy mimic';
+				if (searchTerm === 'dark_alchemist') finalSearchTerm = 'heart mimic';
+				if (searchTerm === 'shaman_wind') finalSearchTerm = 'refresh mimic';
+				// Probably others I'm not thinking of
+				// Also bosses and stuff, but they're pretty much entirely missing here anyway
+			}
+			document.getElementById('search-input').value = finalSearchTerm;
+			// Scroll to search button on side menu so that the user can see the results
+			const searchBtn = document.getElementById('search-btn');
+			searchBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			// Perform actual click instead so that it does the proper search navigation
+			searchBtn.click();
+			//performSearch(false, false);
+		});
+
 
 		// Event Handlers
 
@@ -491,9 +563,11 @@ export const app = {
 			const fileList = event.target.files;
 
 			const foundFlags = new Set();
+			const actionFlags = new Set();
 
 			for (const file of fileList) {
 				let name = file.name.toLowerCase();
+				if (name.startsWith('action_')) actionFlags.add(name);
 				// Standard Noita flag prefix
 				if (name.startsWith("card_unlocked_")) {
 					name = name.replace("card_unlocked_", "");
@@ -505,8 +579,11 @@ export const app = {
 				const checkbox = document.getElementById(`unlock-${flagKey}`);
 				checkbox.checked = foundFlags.has(flagKey);
 			});
+			updateUsedSpellProgress(actionFlags);
 
-			// Almost forgot about this
+			// Save spells to settings too
+			updateSpellFlags(Array.from(actionFlags));
+			
 			this.unlocksChanged = true;
 			this.saveSettings();
 
@@ -2715,6 +2792,7 @@ export const app = {
 			showEnemies: document.getElementById('show-enemy-spawns').checked,
 			enableHamisHints: document.getElementById('enable-hamis-hints').checked,
 			gameMode: document.getElementById('game-mode').value,
+			spellFlags: appSettings.spellFlags,
 			//smallPois: document.getElementById('debug-small-pois').checked,
 			//fixHolyMountainEdgeNoise: document.getElementById('debug-fix-holy-mountain-edge-noise').checked,
 			excludeEdgeCases: document.getElementById('exclude-edge-cases').checked,
@@ -2830,6 +2908,9 @@ export const app = {
 					greedCurse: settings.greedCurse || false,
 					extraShopItems: parseInt(settings.extraItemsInHolyMountain) || 0,
 				}
+				// Load spell flags
+				//console.log("Loading spell flags:", settings.spellFlags || []);
+				updateUsedSpellProgress(settings.spellFlags || []);
 				updateSettings(settings);
 				syncSettingsToSearchWorker();
 				syncSettingsToWorldWorker();

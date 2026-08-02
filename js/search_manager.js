@@ -8,6 +8,7 @@ import { unlockedSpells } from './unlocks.js';
 import { getOrGenerateWorld } from './world_manager.js';
 import { T10_SPELLS } from './spells.js';
 import { WAND_TIERS } from './wand_config.js';
+import { getMissingProgressSpells } from './progress.js';
 
 const SEARCH_ENABLED = true;
 let searchActive = false; // Whether to display the search results
@@ -65,8 +66,25 @@ export function clearHighlights() {
 }
 
 function getSearchFilters() {
+    const searchInput = document.getElementById('search-input').value;
+    const missingSpellSearch = /\b(missing|progress)\b/i.test(searchInput);
+    const queryList = searchInput
+        .split(',')
+        .flatMap(query => {
+            const normalizedQuery = query.trim().toLowerCase().replace('_', ' ');
+            if (!/\b(missing|progress)\b/.test(normalizedQuery)) return normalizedQuery ? [normalizedQuery] : [];
+
+            const remainingQuery = normalizedQuery.replace(/\b(missing|progress)\b/g, '').trim();
+            const missingSpells = getMissingProgressSpells().map(spell => spell.toLowerCase().replace('_', ' '));
+            return [...(remainingQuery ? [remainingQuery] : []), ...missingSpells];
+        });
+    if (queryList.length === 0 && missingSpellSearch) {
+        queryList.push('__no_missing_progress_spells__');
+    }
+
 	return {
-		queryList: document.getElementById('search-input').value.split(',').map(s => s.trim().toLowerCase().replace('_', ' ')).filter(s => s),
+        queryList,
+        missingSpellSearch,
 		name: document.getElementById('search-name').value.toLowerCase(),
 		sprite: document.getElementById('search-sprite').value,
 		ac: document.getElementById('search-ac').value.toLowerCase(),

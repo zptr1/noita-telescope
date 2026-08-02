@@ -20,12 +20,15 @@ export const appSettings = {
 	greedCurse: false,
 	extraItemsInHolyMountain: 0,
 	date: null,
+	spellFlags: [],
 	// UI related options are not included here, this is mainly for settings which the web workers will need
 }
 
 export function updateSettings(newSettings) {
+	const spellFlags = newSettings.spellFlags ?? appSettings.spellFlags ?? [];
     Object.assign(appSettings, newSettings);
 	appSettings.date = getDateAndTime();
+	appSettings.spellFlags = spellFlags;
 }
 
 export function updateSettingsFromUI() {
@@ -50,4 +53,9 @@ export function updateSettingsFromUI() {
 		extraItemsInHolyMountain: parseInt(document.getElementById('extra-shop-items')?.value) || 0,
 	};
 	updateSettings(newSettings);
+}
+
+export function updateSpellFlags(spells) {
+	appSettings.spellFlags = spells;
+	console.log(appSettings.spellFlags);
 }

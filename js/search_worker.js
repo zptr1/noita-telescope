@@ -119,6 +119,7 @@ function checkItemMatch(item, f) {
     
     // 2. Spell Item search
     if (item.item === 'spell' && f.queryList.some(q => isMatch(item.spell, q))) return true;
+	if (f.missingSpellSearch) return false;
 
 	// Enemies
 	if (item.type === 'enemy' && f.queryList.some(q => isMatch(item.enemy, q))) return true;
@@ -146,6 +147,7 @@ function checkMatch(poi, f) {
 		return checkWandMatch(data, f);
 	}
 	else if (data.type === 'enemy') {
+        if (f.missingSpellSearch) return false;
 		// Currently only used for mimics (broken)
 		if (f.queryList.length === 0) return false;
 		const tempItem = {type:'item', item: data.enemy};
@@ -162,7 +164,7 @@ function checkMatch(poi, f) {
 		// Why was this necessary? Empty string search with other filters seems fine
 		//if (f.queryList.length === 0) return false;
 		// Check container name?
-		if (isMatch(data.type, f.queryList.join(','))) return true; // Eh?
+        if (!f.missingSpellSearch && isMatch(data.type, f.queryList.join(','))) return true; // Eh?
 		// Check if any item inside the chest matches the query
 		return data.items.some(item => checkItemMatch(item, f));
 	}
