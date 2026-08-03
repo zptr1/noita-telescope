@@ -321,14 +321,25 @@ export function setupProgressUI(onSpellSearch) {
 
 	const setVisible = (visible) => {
 		overlay.style.display = visible ? 'flex' : 'none';
-		if (visible) renderProgressLists();
+		if (visible) {
+			renderProgressLists();
+			document.dispatchEvent(new CustomEvent('telescope-overlay-open', {
+				detail: { overlayId: 'progress-overlay' }
+			}));
+		}
+		document.getElementById('progress-button').textContent = overlay.style.display === 'flex' ? 'Close Progress ◀' : 'Open Progress ▶';
 	};
+	document.addEventListener('telescope-overlay-open', (event) => {
+		if (event.detail.overlayId !== 'progress-overlay') setVisible(false);
+	});
 
 	document.getElementById('progress-button').onclick = () => {
 		// Toggle visibility
 		setVisible(overlay.style.display !== 'flex');
 	};
-	closeButton.onclick = () => setVisible(false);
+	closeButton.onclick = () => {
+		setVisible(false);
+	};
 	showMissingCheckbox.onchange = () => {
 		showMissingSpells = showMissingCheckbox.checked;
 		renderProgressLists();

@@ -1,6 +1,6 @@
 import { getDisplayName } from "./translations.js";
 import { POTION_COLORS } from './potion_config.js';
-import { getTemplePerks, rerollTemplePerks, pickupPerk, getGamblePerks, getAlwaysCasts, PERKS } from "./perks.js";
+import { getPerkDeck, getTemplePerks, rerollTemplePerks, pickupPerk, getGamblePerks, getAlwaysCasts, PERKS } from "./perks.js";
 
 function capitalize(str) {
     if (typeof str !== 'string' || str.length === 0) {
@@ -153,6 +153,17 @@ let perkPickups = {};
 let gameMode = 'normal';
 let perkLotteryCount = 0;
 let showAllAlwaysCasts = false;
+let resolvedPerkPickups = {};
+let showRerollDeck = false;
+
+function notifyGenerationPerkChanges(perkPickups) {
+    document.dispatchEvent(new CustomEvent('perk-simulation-changed', {
+        detail: {
+            noMoreShuffle: Boolean(perkPickups.NO_MORE_SHUFFLE),
+            extraShopItems: perkPickups.EXTRA_SHOP_ITEM || 0,
+        }
+    }));
+}
 
 function formatPerkName(id) {
     if (!id) return '';
@@ -171,8 +182,22 @@ function getPerkDisplayName(id) {
 }
 
 function getTempleCount(ng, pwIndex) {
-    if (ng > 0) return 5;
+    if (ng > 0) return pwIndex === 0 ? 5 : 4;
     return pwIndex === 0 ? 7 : 6;
+}
+
+function getRemainingRerollDeck(rerollIndex, perkPickups) {
+    const perkDeck = getPerkDeck(currentSeed, currentNg, perkPickups, [], gameMode);
+    const remainingCount = perkDeck.filter(Boolean).length;
+    if (remainingCount === 0) return [];
+
+    const remainingPerks = [];
+    let index = rerollIndex ?? perkDeck.length - 1;
+    while (remainingPerks.length < remainingCount) {
+        if (perkDeck[index]) remainingPerks.push(perkDeck[index]);
+        index = (index - 1 + perkDeck.length) % perkDeck.length;
+    }
+    return remainingPerks;
 }
 
 /**
@@ -191,6 +216,8 @@ export function renderPerkUI() {
     const lotteryInput = document.getElementById('lottery-count');
     const acCheckbox = document.getElementById('show-always-casts');
     const resetBtn = document.getElementById('reset-btn');
+    const rerollDeckButton = document.getElementById('reroll-deck-toggle');
+    const rerollDeckList = document.getElementById('reroll-deck-list');
 
     if (pwLabel) {
         if (currentPwIndex === 0) pwLabel.textContent = "Main World";
@@ -207,6 +234,7 @@ export function renderPerkUI() {
         if (lotteryInput) lotteryInput.value = 0;
         currentPwIndex = 0;
         renderPerkUI(); 
+        notifyGenerationPerkChanges(perkPickups);
     };
 
     if (lotteryInput) {
@@ -301,6 +329,23 @@ export function renderPerkUI() {
     if (lotteriesLostInCleanup > 0) {
         perkLotteryCount = Math.max(0, perkLotteryCount - lotteriesLostInCleanup);
         if (lotteryInput) lotteryInput.value = perkLotteryCount;
+    }
+    resolvedPerkPickups = accumulatedPickups;
+    const remainingRerollDeck = getRemainingRerollDeck(rIdx, resolvedPerkPickups);
+    if (rerollDeckButton) {
+        rerollDeckButton.textContent = `${showRerollDeck ? 'Hide' : 'Show'} reroll perk deck (${remainingRerollDeck.length})`;
+        rerollDeckButton.onclick = () => {
+            showRerollDeck = !showRerollDeck;
+            renderPerkUI();
+        };
+    }
+    if (rerollDeckList) {
+        rerollDeckList.hidden = !showRerollDeck;
+        rerollDeckList.innerHTML = remainingRerollDeck.map(perkId => `
+            <div class="reroll-deck-card" title="${getPerkDisplayName(perkId)}">
+                <img class="perk-icon" src="data/perk_sprites/${perkId.toLowerCase()}.png" alt="${getPerkDisplayName(perkId)}" onerror="this.src='data/perk_sprites/unknown.png'">
+            </div>
+        `).join('');
     }
 
     // --- PASS 2: RENDER DOM ---
@@ -406,6 +451,7 @@ export function renderPerkUI() {
             
             if (lotteryInput) lotteryInput.value = perkLotteryCount;
             renderPerkUI();
+            notifyGenerationPerkChanges(resolvedPerkPickups);
             return;
         }
 
@@ -427,18 +473,44 @@ export function renderPerkUI() {
             return;
         }
     };
+
 }
 
-export function updatePerksState(seed, ng, pwIndex = 0, newPerkPickups = {}, newGameMode = 'normal', lotteryCount = 0) {
-    currentSeed = seed;
-    currentNg = ng;
-    currentPwIndex = pwIndex; 
-    perkPickups = newPerkPickups;
-    gameMode = newGameMode;
-    perkLotteryCount = lotteryCount;
-    
+export function getPerkSimulationState() {
+    return {
+        pwRerolls: structuredClone(pwRerolls),
+        selectedPerks: structuredClone(uiSelectedPerks),
+        pwIndex: currentPwIndex,
+        lotteryCount: perkLotteryCount,
+        showAllAlwaysCasts,
+        perkPickups: structuredClone(perkPickups),
+    };
+}
+
+export function importPerkPickups(importedPerks) {
+    perkPickups = structuredClone(importedPerks);
     pwRerolls = {};
     uiSelectedPerks = {};
+    perkLotteryCount = 0;
+    currentPwIndex = 0;
+    renderPerkUI();
+    notifyGenerationPerkChanges(perkPickups);
+}
+
+export function updatePerksState(seed, ng, pwIndex = 0, newPerkPickups = {}, newGameMode = 'normal', lotteryCount = 0, savedState = null, retainTakenPerks = false) {
+    currentSeed = seed;
+    currentNg = ng;
+    gameMode = newGameMode;
+    currentPwIndex = retainTakenPerks ? 0 : (savedState?.pwIndex ?? pwIndex);
+    perkLotteryCount = savedState?.lotteryCount ?? lotteryCount;
+    showAllAlwaysCasts = savedState?.showAllAlwaysCasts ?? false;
+    pwRerolls = savedState ? structuredClone(savedState.pwRerolls) : {};
+    uiSelectedPerks = savedState && !retainTakenPerks ? structuredClone(savedState.selectedPerks) : {};
+    perkPickups = structuredClone(savedState?.perkPickups ?? newPerkPickups);
+    if (retainTakenPerks) {
+        perkPickups = Object.values(savedState?.selectedPerks ?? {}).flat()
+            .reduce((pickups, perk) => pickupPerk(perk.id, pickups), perkPickups);
+    }
     
     const lotteryInput = document.getElementById('lottery-count');
     if (lotteryInput) lotteryInput.value = perkLotteryCount;

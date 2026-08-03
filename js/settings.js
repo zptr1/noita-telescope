@@ -19,6 +19,7 @@ export const appSettings = {
 	noMoreShuffle: false,
 	greedCurse: false,
 	extraItemsInHolyMountain: 0,
+	accessibilityMode: false,
 	date: null,
 	spellFlags: [],
 	// UI related options are not included here, this is mainly for settings which the web workers will need
@@ -51,6 +52,7 @@ export function updateSettingsFromUI() {
 		noMoreShuffle: document.getElementById('no-more-shuffle')?.checked || false,
 		greedCurse: document.getElementById('greed-curse')?.checked || false,
 		extraItemsInHolyMountain: parseInt(document.getElementById('extra-shop-items')?.value) || 0,
+		accessibilityMode: document.getElementById('accessibility-mode')?.checked || false,
 	};
 	updateSettings(newSettings);
 }

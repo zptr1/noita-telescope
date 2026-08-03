@@ -8,7 +8,7 @@ import { generateBiomeTiles } from './tile_generator.js';
 import { scanSpawnFunctions, getSpecialPoIs, prescanSpawnFunctions } from './poi_scanner.js';
 import { performSearch, navigateSearch, cancelSearch, isSearchActive, clearHighlights, performLocalSearch, syncSearchWorkerData, activeLocalSearchArea, syncSettingsToSearchWorker, continueSearchSequence } from './search_manager.js';
 import { TIME_UNTIL_LOADING, POI_RADIUS, CHUNK_SIZE, BIOME_EDGE_NOISE_PADDING_PIXELS, VISUAL_TILE_OFFSET_X, VISUAL_TILE_OFFSET_Y, MIN_CAM_Z, SKY_EXTRA_HEIGHT } from './constants.js';
-import { getBiomeAtWorldCoordinates, getMaterialAtWorldCoordinates, getPWIndices, getWorldCenter, getWorldSize, getPWLimit, MATERIAL_CONTAINER_TYPES } from './utils.js';
+import { getBiomeAtWorldCoordinates, getMaterialAtWorldCoordinates, getWorldCenter, getWorldSize, getPWLimit, MATERIAL_CONTAINER_TYPES } from './utils.js';
 import { renderWallMessages } from './wall_messages.js';
 import { findEyeMessages, renderEyeMessages } from './eye_messages.js';
 import { BIOME_COLOR_LOOKUP, createBiomeMapAlphaMask, createTileOverlays, createTileOverlaysCheap, createTileOverlaysExpanded } from './image_processing.js';
@@ -19,11 +19,11 @@ import { addStaticPixelScenes } from './static_spawns.js';
 import { NollaPrng } from './nolla_prng.js';
 import { appSettings, updateSettings, updateSpellFlags } from './settings.js';
 import { syncWorldWorkerData, getOrGenerateWorld, syncSettingsToWorldWorker } from './world_manager.js';
-import { syncOverlayWorkerData, getOrGenerateOverlay, syncSettingsToOverlayWorker, recolorPixelScenes, isOverlayPending, invalidatePendingOverlays } from './overlay_manager.js';
+import { syncOverlayWorkerData, getOrGenerateOverlay, syncSettingsToOverlayWorker, recolorPixelScenes, invalidatePendingOverlays } from './overlay_manager.js';
 import { getBiomeModifiers, getStartingWeather } from './misc_generation.js';
 import { getCauldronState, getCauldronVariation } from './cauldron.js';
 import { WAND_TIERS } from './wand_config.js';
-import { renderFungalShifts, renderAlchemyRecipes, updatePerksState } from './misc_ui.js';
+import { renderFungalShifts, renderAlchemyRecipes, getPerkSimulationState, importPerkPickups, updatePerksState } from './misc_ui.js';
 import { setupProgressUI, updateUsedSpellProgress } from './progress.js';
 import { renderStars } from './star_decorations.js';
 import { getFungalShifts } from './fungal_shifts.js';
@@ -112,6 +112,7 @@ export const app = {
 	translations: {},
 	loadingTimer: null,
 	perks: {}, // extraShopItems, greedCurse, noMoreShuffle
+	perkSimulationRetention: 'selection',
 
 	debugCanvas: null,
 	debugX: 0, debugY: 0,
@@ -158,9 +159,38 @@ export const app = {
 		// Menu Toggles
 		document.querySelector('.adv-toggle').onclick = () => this.toggleAdvancedSearch();
 		document.querySelector('.debug-toggle').onclick = () => this.toggleDebugOptions();
-		document.querySelector('#fungal-shifts-label').onclick = () => this.toggleFungalShifts();
 		document.querySelector('#alchemy-label').onclick = () => this.toggleAlchemyRecipes();
-		document.querySelector('#perks-label').onclick = () => this.togglePerkDeck();
+		const fungalShiftsOverlay = document.getElementById('fungal-shifts-overlay');
+		const setFungalShiftsVisible = (visible) => {
+			fungalShiftsOverlay.style.display = visible ? 'flex' : 'none';
+			document.getElementById('fungal-shifts-button').textContent = fungalShiftsOverlay.style.display === 'flex' ? 'Close Fungal Shifts ◀' : 'Open Fungal Shifts ▶';
+
+			if (visible) document.dispatchEvent(new CustomEvent('telescope-overlay-open', {
+				detail: { overlayId: 'fungal-shifts-overlay' }
+			}));
+		};
+		document.getElementById('fungal-shifts-button').onclick = () => {
+			setFungalShiftsVisible(fungalShiftsOverlay.style.display !== 'flex');
+		};
+		document.getElementById('fungal-shifts-close').onclick = () => setFungalShiftsVisible(false);
+		document.addEventListener('telescope-overlay-open', (event) => {
+			if (event.detail.overlayId !== 'fungal-shifts-overlay') setFungalShiftsVisible(false);
+		});
+		const perkDeckOverlay = document.getElementById('perk-deck-overlay');
+		const setPerkDeckVisible = (visible) => {
+			perkDeckOverlay.style.display = visible ? 'flex' : 'none';
+			document.getElementById('perk-deck-button').textContent = perkDeckOverlay.style.display === 'flex' ? 'Close Perk Deck ◀' : 'Open Perk Deck ▶';
+			if (visible) document.dispatchEvent(new CustomEvent('telescope-overlay-open', {
+				detail: { overlayId: 'perk-deck-overlay' }
+			}));
+		};
+		document.getElementById('perk-deck-button').onclick = () => {
+			setPerkDeckVisible(perkDeckOverlay.style.display !== 'flex');
+		};
+		document.getElementById('perk-deck-close').onclick = () => setPerkDeckVisible(false);
+		document.addEventListener('telescope-overlay-open', (event) => {
+			if (event.detail.overlayId !== 'perk-deck-overlay') setPerkDeckVisible(false);
+		});
 		
 		document.getElementById('daily-run-button').onclick = () => {
 			this.getDailyRunSeed().then(seed => {
@@ -178,6 +208,7 @@ export const app = {
 					//list.querySelectorAll('input').forEach(c => c.checked = true);
 					// Moved this to settings with the daily flag so that persistent unlocks are not changed
 					this.isDaily = true;
+					this.perkSimulationRetention = 'none';
 					this.saveSettings();
 					this.unlocksChanged = true;
 					this.generate(true, true);
@@ -191,21 +222,12 @@ export const app = {
 		// Horizontal
 		const pwInput = document.getElementById('pw');
 		pwInput.onchange = () => {
+			const refreshCurrentPWSearch = isSearchActive() && !document.getElementById('search-all-pw').checked;
+			if (refreshCurrentPWSearch) cancelSearch();
 			this.pw = parseInt(pwInput.value) || 0;
-			// Regenerate/Scan for wands/items in the new PW
-			// TODO: Don't want to cancel search but not sure what to do differently
-			//cancelSearch(); // Cancel any active search when changing PW
-			//cancelBtn.style.display = 'none';
 			this.checkBounds();
 			this.generate(false, false).then(() => {
-				// Rerun the search after scanning is complete to find new matches
-				//cancelSearch(); // No need to cancel it here, new PW means new results anyway
-				/*
-				if (isSearchActive()) {
-					performSearch(false, false);
-					this.draw();
-				}
-				*/
+				if (refreshCurrentPWSearch) performSearch(false, false);
 			});
 		};
 		document.getElementById('pw-inc').onclick = () => {
@@ -219,21 +241,12 @@ export const app = {
 		// Vertical
 		const pwInputVertical = document.getElementById('pw-vertical');
 		pwInputVertical.onchange = () => {
+			const refreshCurrentPWSearch = isSearchActive() && !document.getElementById('search-all-pw').checked;
+			if (refreshCurrentPWSearch) cancelSearch();
 			this.pwVertical = parseInt(pwInputVertical.value) || 0;
-			// Regenerate/Scan for wands/items in the new PW
-			// TODO: Don't want to cancel search but not sure what to do differently
-			//cancelSearch(); // Cancel any active search when changing PW
-			//cancelBtn.style.display = 'none';
 			this.checkBounds();
 			this.generate(false, false).then(() => {
-				// Rerun the search after scanning is complete to find new matches
-				//cancelSearch(); // No need to cancel it here, new PW means new results anyway
-				/*
-				if (isSearchActive()) {
-					performSearch(false, false);
-					this.draw();
-				}
-				*/
+				if (refreshCurrentPWSearch) performSearch(false, false);
 			});
 		};
 		document.getElementById('pw-inc-vertical').onclick = () => {
@@ -265,6 +278,7 @@ export const app = {
 			document.getElementById('greed-curse').checked = false;
 			document.getElementById('extra-shop-items').value = 0;
 			this.perks = {};
+			this.perkSimulationRetention = 'none';
 			// Still need to save settings I think...
 			this.saveSettings();
 			this.generate(true, true);
@@ -279,6 +293,7 @@ export const app = {
 			url.searchParams.set('ng', value);
 			window.history.replaceState({}, '', url.toString());
 			// Do not clear daily run flag
+			this.perkSimulationRetention = 'taken-perks';
 			this.saveSettings();
 			this.generate(true, true);
 		};
@@ -300,6 +315,7 @@ export const app = {
 		// TODO: For now I'm just going to do a full regen because syncing the worker threads is a pain
 		document.getElementById('no-more-shuffle').onchange = () => {
 			this.perks['noMoreShuffle'] = document.getElementById('no-more-shuffle').checked; 
+			this.perkSimulationRetention = 'selection';
 			this.saveSettings(); 
 			this.generate(true, true)
 		};
@@ -310,6 +326,7 @@ export const app = {
 		};
 		document.getElementById('extra-shop-items').onchange = () => {
 			this.perks['extraShopItems'] = parseInt(document.getElementById('extra-shop-items').value);
+			this.perkSimulationRetention = 'selection';
 			this.saveSettings();
 			this.generate(true, true);
 		};
@@ -390,6 +407,7 @@ export const app = {
 			this.generate(true, true);
 		};
 		document.getElementById('debug-edge-noise').onchange = () => {
+			this.saveSettings();
 			this.draw();
 		};
 		document.getElementById('visited-coalmine-alt-shrine').onchange = () => {
@@ -409,6 +427,11 @@ export const app = {
 			this.saveSettings();
 			reloadPixelSceneCache().then(() => this.generate(true, true));
 		};
+		document.getElementById('accessibility-mode').onchange = () => {
+			this.saveSettings();
+			this.draw();
+		}
+
 		// Search
 
 		// Setup range value displays
@@ -424,8 +447,8 @@ export const app = {
 				performSearch(true, true); 
 			}
 		};
-		document.getElementById('search-prev').onclick = () => navigateSearch(-1);
-		document.getElementById('search-next').onclick = () => navigateSearch(1);
+		document.getElementById('search-prev').onclick = () => navigateSearch(-1, true);
+		document.getElementById('search-next').onclick = () => navigateSearch(1, true);
 		const cancelBtn = document.getElementById('cancel-search');
 		cancelBtn.onclick = () => { 
 			cancelSearch();
@@ -476,14 +499,16 @@ export const app = {
 			}
 		}
 
-		document.getElementById('search-rare-btn').onclick = () => {
+		const runQuickSearch = (query) => {
 			cancelSearch();
 			this.draw(); // Clear highlights immediately on new search
-			document.getElementById('search-input').value = 'rare';
+			document.getElementById('search-input').value = query;
 			document.getElementById('search-all-pw').checked = false;
 			document.getElementById('search-vertical-pw').checked = false;
 			performSearch(true, false);
 		};
+		document.getElementById('search-rare-btn').onclick = () => runQuickSearch('rare');
+		document.getElementById('search-missing-progress-btn').onclick = () => runQuickSearch('missing');
 
 		setupProgressUI((searchTerm, category) => {
 			document.getElementById('progress-overlay').style.display = 'none';
@@ -554,6 +579,50 @@ export const app = {
 			searchBtn.click();
 			//performSearch(false, false);
 		});
+
+		document.addEventListener('perk-simulation-changed', (event) => {
+			const { noMoreShuffle, extraShopItems } = event.detail;
+			const noMoreShuffleInput = document.getElementById('no-more-shuffle');
+			const extraShopItemsInput = document.getElementById('extra-shop-items');
+			if (noMoreShuffleInput.checked === noMoreShuffle && parseInt(extraShopItemsInput.value) === extraShopItems) return;
+
+			noMoreShuffleInput.checked = noMoreShuffle;
+			extraShopItemsInput.value = extraShopItems;
+			this.perks.noMoreShuffle = noMoreShuffle;
+			this.perks.extraShopItems = extraShopItems;
+			this.perkSimulationRetention = 'selection';
+			this.saveSettings();
+			this.generate(true, true);
+		});
+
+		document.getElementById('player-copy-path-btn').onclick = async () => {
+			try {
+				await navigator.clipboard.writeText('%USERPROFILE%\\AppData\\LocalLow\\Nolla_Games_Noita\\save00');
+				document.getElementById('player-copy-path-btn').textContent = 'Copied!';
+				setTimeout(() => { document.getElementById('player-copy-path-btn').textContent = 'Copy Path'; }, 2000);
+			} catch (error) {
+				console.error('Failed to copy player path:', error);
+			}
+		};
+		document.getElementById('player-file-picker').onchange = async (event) => {
+			const [playerFile] = event.target.files;
+			if (!playerFile) return;
+			if (playerFile.name.toLowerCase() !== 'player.xml') {
+				alert('Please select player.xml.');
+				event.target.value = '';
+				return;
+			}
+
+			const perkPickups = {};
+			const perkPattern = /\$perk_([a-z_]+)/gi;
+			for (const match of (await playerFile.text()).matchAll(perkPattern)) {
+				const perkId = match[1].toUpperCase();
+				perkPickups[perkId] = (perkPickups[perkId] || 0) + 1;
+			}
+			importPerkPickups(perkPickups);
+			this.perkSimulationRetention = 'selection';
+			event.target.value = '';
+		};
 
 
 		// Event Handlers
@@ -1249,6 +1318,12 @@ export const app = {
 					tempRadius = POI_RADIUS / this.cam.z;
 					if (tempRadius < POI_RADIUS) tempRadius = POI_RADIUS;
 				}
+				if (document.getElementById('accessibility-mode').checked) {
+					tempRadius *= 1.5; // Increase hit radius for accessibility mode
+				}
+				if (document.getElementById('debug-small-pois').checked) {
+					tempRadius = 5.0;
+				}
 				return Math.sqrt((px - wx) ** 2 + (py - wy) ** 2) < tempRadius;
 			});
 			if (poiHit) return poiHit;
@@ -1541,7 +1616,10 @@ export const app = {
 			//console.log("Alchemy Recipes:", this.alchemyRecipes);
 			renderAlchemyRecipes(this.alchemyRecipes);
 
-			updatePerksState(seedVal, ngVal, 0, {}, this.gameMode);
+			const retainTakenPerks = this.perkSimulationRetention === 'taken-perks';
+			const simulationState = this.perkSimulationRetention === 'none' ? null : getPerkSimulationState();
+			updatePerksState(seedVal, ngVal, 0, {}, this.gameMode, 0, simulationState, retainTakenPerks);
+			this.perkSimulationRetention = 'none';
 
 			this.cauldronState = await getCauldronState();
 			console.log("Cauldron State:", this.cauldronState);
@@ -2629,7 +2707,128 @@ export const app = {
 						if (document.getElementById('debug-small-pois').checked) {
 							tempRadius = 5;
 						}
-						this.ctx.arc(px, py, tempRadius, 0, Math.PI * 2);
+						if (document.getElementById('accessibility-mode').checked) {
+							// Shapes for accessibility mode
+							tempRadius *= 1.5; // Scale up for better visibility
+							switch (p.type) {
+								case 'wand':
+									// Tall rectangle
+									this.ctx.rect(px - tempRadius / 2, py - tempRadius, tempRadius, tempRadius * 2);
+									break;
+								case 'item':
+									if (p.item) {
+										if (p.item.includes('heart') || p.item === 'full_heal') {
+											// Heart shape (not great curves but meh)
+											this.ctx.moveTo(px, py - tempRadius / 3);
+											this.ctx.bezierCurveTo(px - tempRadius, py - tempRadius, px - tempRadius, py + tempRadius / 3, px, py + tempRadius);
+											this.ctx.bezierCurveTo(px + tempRadius, py + tempRadius / 3, px + tempRadius, py - tempRadius, px, py - tempRadius / 3);
+											this.ctx.closePath();
+										}
+										else if (MATERIAL_CONTAINER_TYPES.includes(p.item)) {
+											// Flask with a narrow neck and rounded body
+											this.ctx.moveTo(px - tempRadius * 0.28, py - tempRadius);
+											this.ctx.lineTo(px + tempRadius * 0.28, py - tempRadius);
+											this.ctx.lineTo(px + tempRadius * 0.28, py - tempRadius * 0.42);
+											this.ctx.bezierCurveTo(
+												px + tempRadius * 0.28, py - tempRadius * 0.16,
+												px + tempRadius * 0.86, py - tempRadius * 0.08,
+												px + tempRadius * 0.88, py + tempRadius * 0.48
+											);
+											this.ctx.bezierCurveTo(
+												px + tempRadius * 0.9, py + tempRadius * 0.83,
+												px + tempRadius * 0.48, py + tempRadius,
+												px, py + tempRadius
+											);
+											this.ctx.bezierCurveTo(
+												px - tempRadius * 0.48, py + tempRadius,
+												px - tempRadius * 0.9, py + tempRadius * 0.83,
+												px - tempRadius * 0.88, py + tempRadius * 0.48
+											);
+											this.ctx.bezierCurveTo(
+												px - tempRadius * 0.86, py - tempRadius * 0.08,
+												px - tempRadius * 0.28, py - tempRadius * 0.16,
+												px - tempRadius * 0.28, py - tempRadius * 0.42
+											);
+											this.ctx.closePath();
+										}
+										else if (p.item === 'portal' || p.item === 'meditation_cube' || p.item === 'buried_eye_teleporter' || p.item === 'trailer_altar') {
+											// Pentagon
+											this.ctx.moveTo(px, py - tempRadius);
+											for (let i = 1; i < 5; i++) {
+												const angle = (Math.PI / 2) + (i * (2 * Math.PI / 5));
+												this.ctx.lineTo(px - tempRadius * Math.cos(angle), py - tempRadius * Math.sin(angle));
+											}
+											this.ctx.closePath();
+											break;
+										}
+										else if (p.item === 'refresh_mimic' || p.item === 'heart_mimic' || p.item === 'mimic' || p.item === 'chest_leggy' || p.item === 'mimic_potion') {
+											// X shape
+											const thickness = tempRadius / 2;
+											this.ctx.moveTo(px - tempRadius, py - thickness);
+											this.ctx.lineTo(px - thickness, py - tempRadius);
+											this.ctx.lineTo(px, py - thickness);
+											this.ctx.lineTo(px + thickness, py - tempRadius);
+											this.ctx.lineTo(px + tempRadius, py - thickness);
+											this.ctx.lineTo(px + thickness, py);
+											this.ctx.lineTo(px + tempRadius, py + thickness);
+											this.ctx.lineTo(px + thickness, py + tempRadius);
+											this.ctx.lineTo(px, py + thickness);
+											this.ctx.lineTo(px - thickness, py + tempRadius);
+											this.ctx.lineTo(px - tempRadius, py + thickness);
+											this.ctx.lineTo(px - thickness, py);
+											this.ctx.closePath();
+										}
+										else {
+											// Square (slightly scaled down because the other stuff looks smaller by area)
+											this.ctx.rect(px - 3*tempRadius/4, py - 3*tempRadius/4, tempRadius * 1.5, tempRadius * 1.5);
+										}
+									}
+									break;
+								case 'utility_box':
+								case 'puzzle':
+								case 'vault_puzzle':
+									// Diamond
+									this.ctx.moveTo(px, py - tempRadius);
+									this.ctx.lineTo(px - tempRadius, py);
+									this.ctx.lineTo(px, py + tempRadius);
+									this.ctx.lineTo(px + tempRadius, py);
+									this.ctx.closePath();
+									break;
+								case 'chest':
+								case 'pacifist_chest':
+								case 'great_chest':
+									// Wide rectangle
+									this.ctx.rect(px - tempRadius, py - tempRadius/2, tempRadius * 2, tempRadius);
+									break;
+								case 'shop':
+								case 'holy_mountain_shop':
+									// Hexagon
+									this.ctx.moveTo(px, py + tempRadius);
+									for (let i = 1; i < 6; i++) {
+										const angle = (Math.PI / 2) + (i * (2 * Math.PI / 6));
+										this.ctx.lineTo(px + tempRadius * Math.cos(angle), py + tempRadius * Math.sin(angle));
+									}
+									this.ctx.closePath();
+									break;
+								case 'eye_room':
+									// Eye shape (horizontal)
+									this.ctx.moveTo(px - tempRadius, py);
+									this.ctx.quadraticCurveTo(px, py - tempRadius, px + tempRadius, py);
+									this.ctx.quadraticCurveTo(px, py + tempRadius, px - tempRadius, py);
+									this.ctx.closePath();
+									break;
+								case 'enemies':
+									// Circle
+									this.ctx.arc(px, py, tempRadius*0.7, 0, Math.PI * 2);
+									break;
+								default:
+									this.ctx.arc(px, py, tempRadius, 0, Math.PI * 2); // Default to circle
+							}
+						}
+						else {
+							// Colored circles
+							this.ctx.arc(px, py, tempRadius, 0, Math.PI * 2);
+						}
 						this.ctx.fillStyle = poiColor;
 						this.ctx.fill();
 						this.ctx.stroke();
@@ -2673,16 +2872,6 @@ export const app = {
 		ui.style.display = ui.style.display === 'block' ? 'none' : 'block';
 	},
 
-	toggleFungalShifts() {
-		const ui = document.getElementById('shifts-list');
-		ui.style.display = ui.style.display === 'block' ? 'none' : 'block';
-		if (ui.style.display === 'block') {
-			document.getElementById('fungal-shifts-label').innerText = 'Fungal Shifts ▲';
-		} else {
-			document.getElementById('fungal-shifts-label').innerText = 'Fungal Shifts ▼';
-		}
-	},
-
 	toggleAlchemyRecipes() {
 		const ui = document.getElementById('alchemy-list');
 		ui.style.display = ui.style.display === 'block' ? 'none' : 'block';
@@ -2691,17 +2880,6 @@ export const app = {
 		}
 		else {
 			document.getElementById('alchemy-label').innerText = 'Alchemy Recipes ▼';
-		}
-	},
-
-	togglePerkDeck() {
-		const ui = document.getElementById('perks-data');
-		ui.style.display = ui.style.display === 'block' ? 'none' : 'block';
-		if (ui.style.display === 'block') {
-			document.getElementById('perks-label').innerText = 'Perk Deck ▲';
-		}
-		else {
-			document.getElementById('perks-label').innerText = 'Perk Deck ▼';
 		}
 	},
 
@@ -2798,6 +2976,7 @@ export const app = {
 			excludeEdgeCases: document.getElementById('exclude-edge-cases').checked,
 			//extraRerolls: parseInt(document.getElementById('debug-extra-rerolls').value),
 			//rngInfo: document.getElementById('debug-rng-info').checked,
+			accessibilityMode: document.getElementById('accessibility-mode').checked,
 		};
 		// Unlock settings
 		const unlockSettings = {};
@@ -2869,6 +3048,7 @@ export const app = {
 				document.getElementById('exclude-edge-cases').checked = settings.excludeEdgeCases || false;
 				//document.getElementById('debug-extra-rerolls').value = settings.extraRerolls || 0;
 				//document.getElementById('debug-rng-info').checked = settings.rngInfo || false;
+				document.getElementById('accessibility-mode').checked = settings.accessibilityMode || false;
 				// Unlock settings
 				for (const unlock of Object.keys(UNLOCKABLES)) {
 					document.getElementById(`unlock-${unlock}`).checked = settings[`unlock_${unlock}`];

@@ -1,24 +1,37 @@
 import { app } from './app.js';
 import { TIME_UNTIL_LOADING } from './constants.js';
 import { isMatch } from './translations.js';
-import { appSettings, updateSettings, updateSettingsFromUI } from './settings.js';
+import { appSettings, updateSettingsFromUI } from './settings.js';
 import { PIXEL_SCENE_DATA, PIXEL_SCENE_SPAWN_DATA } from './pixel_scene_generation.js';
 import { TRANSLATIONS } from './translations.js';
 import { unlockedSpells } from './unlocks.js';
 import { getOrGenerateWorld } from './world_manager.js';
 import { T10_SPELLS } from './spells.js';
-import { WAND_TIERS } from './wand_config.js';
+import { GENERATOR_CONFIG } from './generator_config.js';
 import { getMissingProgressSpells } from './progress.js';
 
 const SEARCH_ENABLED = true;
 let searchActive = false; // Whether to display the search results
 let searchContinuing = false; // Whether the search is still ongoing
 let pendingAutoNavigate = false; // Whether to go to the next match when found
+let pendingForceNavigate = false; // Whether the deferred next match was requested by the user
 let search = { results: [], index: -1, mode: null, autoNavigate: false };
 export let activeLocalSearchArea = null;
 
 let lastUpdateDrawTime = 0;
 const UPDATE_DRAW_INTERVAL = 16; // ms
+
+// Only applies to NG, since NG+ shuffles the biomes in a way that makes this less reasonable
+// Plus the sort order usually only matters at the beginning of a run
+const HOLY_MOUNTAIN_SORT_ANCHORS = [
+    { y: 1024, afterBiome: 'coalmine_alt' },
+    { y: 2560, afterBiome: 'excavationsite' },
+    { y: 4608, afterBiome: 'snowcave' },
+    { y: 6144, afterBiome: 'snowcastle' },
+    { y: 8192, afterBiome: 'rainforest_open' },
+    { y: 10240, afterBiome: 'vault' },
+    { y: 12800, afterBiome: 'crypt' }
+];
 
 // Sync PoIs by PW with the worker so it can do filtering without needing to send all data back and forth
 let syncedKeys = new Set();
@@ -131,63 +144,6 @@ searchWorker.onmessage = async (e) => {
     else if (msg.type === 'REQUEST_PW_DATA') {
         getOrGenerateWorld(msg.pw, msg.pwVertical);
     }
-    // Deprecated
-    else if (msg.type === 'PWS_GENERATED') {
-        // Cache the PW data sent back from the worker so the map can draw it
-        //const pwKey = `${msg.pw},${msg.pwVertical}`;
-        //app.poisByPW[pwKey] = msg.pois;
-        //app.pixelScenesByPW[pwKey] = msg.pixelScenes;
-        // This might take a while
-        //const t0 = performance.now();
-        for (let pwKey of Object.keys(msg.pois)) {
-            if (!app.poisByPW[pwKey]) {
-                app.poisByPW[pwKey] = msg.pois[pwKey];
-            }
-        }
-        
-        for (let pwKey of Object.keys(msg.pixelScenes)) {
-            if (!app.pixelScenesByPW[pwKey]) {
-                app.pixelScenesByPW[pwKey] = msg.pixelScenes[pwKey];
-            }
-            // Sync any newly generated pixel scene variants to the main thread cache so they can be used in the UI
-            for (const scene of msg.pixelScenes[pwKey]) {
-                // Ensure the variant dictionary exists
-                if (!PIXEL_SCENE_DATA[scene.key].variants) {
-                    PIXEL_SCENE_DATA[scene.key].variants = {};
-                }
-                
-                // If the main thread doesn't have this recolored variant yet, save it
-                if (!PIXEL_SCENE_DATA[scene.key].variants[scene.variantKey]) {
-                    PIXEL_SCENE_DATA[scene.key].variants[scene.variantKey] = scene.imgElement;
-                }
-            }
-        }
-
-        //const t1 = performance.now();
-        //console.log(`Processed PW data in ${((t1 - t0) / 1000).toFixed(2)} seconds`);
-
-        if (msg.matches.length > 0) {
-            processPWMatches(msg.matches);
-        }
-        const isDone = msg.done || false;
-        if (isDone) {
-            app.setLoading(false);
-            searchContinuing = false;
-            document.getElementById('search-status').innerText = '';
-            document.getElementById('search-status-container').style.display = 'none';
-        }
-        //const lastIndex = search.index;
-        updateUIForMatches();
-        if (!isBackgroundSearchEnabled()) {
-            app.setLoading(false); // Prevent blocking popup
-            /*
-            if (lastIndex != -1) {
-                navigateSearch(1); // Navigate to the first result after the worker finds it
-            }
-            */
-        }
-        
-    }
     else if (msg.type === 'MATCH_FOUND') {
         const { item, x, y } = msg;
         app.setLoading(false);
@@ -205,7 +161,7 @@ searchWorker.onmessage = async (e) => {
     else if (msg.type === 'MATCHES_FOUND') {
         const { matches, pw, pwVertical } = msg;
         app.setLoading(false);
-        processPWMatches(matches);
+        processPWMatches(matches, pw, pwVertical);
     }
     else if (msg.type === 'DONE') {
         app.setLoading(false);
@@ -312,13 +268,13 @@ async function updateUIForMatches() {
         search.results.forEach(result => {
             result.highlight = true;
         });
-        // If we just found the first item, navigate to it automatically
-        if (search.index === -1 || pendingAutoNavigate) {
-            //console.log("Navigating to first match...");
+        // Deferred next-result requests must advance immediately. Initial results only do so when automatic navigation is enabled.
+        if (pendingAutoNavigate || (search.index === -1 && search.autoNavigate)) {
+            const forceNavigate = pendingAutoNavigate && pendingForceNavigate;
             pendingAutoNavigate = false;
-            await navigateSearch(1);
+            pendingForceNavigate = false;
+            await navigateSearch(1, forceNavigate);
         } else {
-            // Just update the total count without navigating
             const suffix = searchContinuing ? "..." : "";
             document.getElementById('search-count').innerText = `${search.index + 1} / ${search.results.length}${suffix}`;
         }
@@ -379,7 +335,7 @@ export async function performSearch(allowIterative = true, autoNavigate = true) 
     }
     if (!searchTarget) searchTarget = 'other';
 
-    let currentSequence = [];
+    let currentSequence;
 
     // Generate the standard PW Sequence
     if (!searchVerticalPW) {
@@ -494,7 +450,7 @@ export async function performLocalSearch(mode, startX, startY) {
     });
 }
 
-export async function navigateSearch(dir) {
+export async function navigateSearch(dir, forceNavigate = false) {
     if (search.results.length === 0) return;
     const bgMode = isBackgroundSearchEnabled();
     
@@ -506,6 +462,7 @@ export async function navigateSearch(dir) {
             app.setLoading(true, "Searching...");
         }
         pendingAutoNavigate = true;
+        pendingForceNavigate = forceNavigate;
         searchWorker.postMessage({ cmd: 'FIND_NEXT' });
         return;
     }
@@ -527,8 +484,8 @@ export async function navigateSearch(dir) {
     const suffix = searchContinuing ? " ..." : "";
     document.getElementById('search-count').innerText = `${search.index + 1} / ${search.results.length}${suffix}`;
     
-    // Only actually autonavigate if it's enabled
-    if (search.autoNavigate) {
+    // Automatic navigation may be disabled after a PW transition, but button presses always navigate.
+    if (search.autoNavigate || forceNavigate) {
         app.gotoPOI(current.poi);
     }
     else {
@@ -541,6 +498,7 @@ export function cancelSearch() {
     searchActive = false;
     activeLocalSearchArea = null;
     pendingAutoNavigate = false;
+    pendingForceNavigate = false;
     document.getElementById('search-status').innerText = '';
     document.getElementById('search-status-container').style.display = 'none';
     searchWorker.postMessage({ cmd: 'CANCEL' }); 
@@ -586,8 +544,9 @@ export function syncSettingsToSearchWorker() {
     syncedKeys = new Set();
 }
 
-function processPWMatches(matches) {
+function processPWMatches(matches, pw, pwVertical) {
     for (let match of matches) {
+        // Redundant
         const pwKey = `${match.pw},${match.pwVertical}`;
         
         // Ensure the array exists and the index is valid
@@ -604,8 +563,31 @@ function processPWMatches(matches) {
         }
     }
 
+    // Sort the matches by biome order, then by Y. Needs an exception for holy mountains
+    // This only needs to be done for the main world
+    // This is going to be broken for nightmare but whatever
+    if (!app.isNGP && pw === 0 && pwVertical === 0) {
+        const biomeOrder = new Map(Object.keys(GENERATOR_CONFIG).map((biome, index) => [biome, index]));
+        const getBiomeSortOrder = (poi) => {
+            if (!poi.biome?.includes('temple_altar')) {
+                return biomeOrder.get(poi.biome) ?? Number.MAX_SAFE_INTEGER;
+            }
+
+            const anchor = HOLY_MOUNTAIN_SORT_ANCHORS.reduce((closest, candidate) =>
+                Math.abs(candidate.y - poi.y) < Math.abs(closest.y - poi.y) ? candidate : closest
+            );
+            return (biomeOrder.get(anchor.afterBiome) ?? Number.MAX_SAFE_INTEGER) + 0.5;
+        };
+        matches.sort((a, b) => {
+            const aBiomeIndex = getBiomeSortOrder(a.poi);
+            const bBiomeIndex = getBiomeSortOrder(b.poi);
+            return aBiomeIndex - bBiomeIndex || a.poi.y - b.poi.y || a.poi.x - b.poi.x;
+        });
+    }
+
     // Now safely add them to the search results
     search.results.push(...matches);
+    app.draw();
     updateUIForMatches();
 }
 

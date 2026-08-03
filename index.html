@@ -139,7 +139,10 @@
 
         #progress-overlay {
             position: absolute;
-            inset: 24px;
+            top: 24px;
+            bottom: 24px;
+            left: 24px;
+            width: min(1260px, calc(100% - 48px));
             z-index: 150;
             display: none;
             flex-direction: column;
@@ -178,6 +181,55 @@
         .progress-card.complete .slot { box-shadow: inset 0 0 0 1px #dca44b; }
         .progress-card.missing .slot { box-shadow: inset 0 0 0 3px #c94b4b; }
         .progress-card:hover .spell-icon { filter: brightness(1.25); }
+
+        #fungal-shifts-overlay {
+            position: absolute;
+            top: 24px;
+            bottom: 24px;
+            left: 24px;
+            width: min(400px, calc(100% - 48px));
+            z-index: 150;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            background: rgba(10, 10, 10, 0.97);
+            border: 2px solid #dca44b;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            color: #eee;
+            text-align: left;
+        }
+
+        .fungal-shifts-list {
+            flex: 1;
+            overflow: auto;
+            margin: 0;
+            padding: 12px;
+        }
+
+        .fungal-shifts-list .shift-item { white-space: nowrap; }
+
+        #perk-deck-overlay {
+            position: absolute;
+            top: 24px;
+            bottom: 24px;
+            left: 24px;
+            width: min(525px, calc(100% - 48px));
+            z-index: 150;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            background: rgba(10, 10, 10, 0.97);
+            border: 2px solid #dca44b;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
+            color: #eee;
+            text-align: left;
+        }
+
+        #perk-deck-overlay #perks-data {
+            display: block;
+            overflow: auto;
+            padding: 12px;
+        }
 
         /* PW Input Styling */
         .pw-controls { display: flex; align-items: center; gap: 5px; }
@@ -313,6 +365,15 @@
             font-size: 12px;
         }
         .compact-row.hidden { display: none; }
+        .quick-search-actions { display: flex; gap: 4px; }
+        .quick-search-actions .btn-small {
+            flex: 0 1 auto;
+            background: #dca44b;
+            color: #111;
+            height: 24px;
+            padding: 0 6px;
+        }
+        .quick-search-label { font-weight: bold; }
 
         .label-orange {
             color: #dca44b;
@@ -574,6 +635,20 @@
             font-family: monospace;
             font-size: 1rem;
         }
+
+        .reroll-deck-toggle { margin-top: 12px; }
+        .reroll-deck-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 8px;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+        }
+        .reroll-deck-list[hidden] { display: none; }
+        .reroll-deck-card { width: 32px; height: 32px; }
+        .reroll-deck-card .perk-icon { display: block; }
 
         .lottery-control {
             display: flex;
@@ -966,7 +1041,13 @@
                 -->
                 <!--<small class="help-text">Only tier 10 spells spawn in vertical PWs, don't use it for wand/item searches or it will be slow for no reason</small>-->
                 
-                <button id="search-rare-btn" style="flex: 0.4; font-size: 12px; padding-top: 4px; padding-bottom: 4px;" title="Search for Rare Items">Quick Search for Rare Stuff</button>
+                <div class="compact-row">
+                    <span class="quick-search-label">Quick Search for:</span>
+                    <div class="quick-search-actions">
+                        <button id="search-rare-btn" class="btn-small" title="Search for Rare Items">Rare Stuff</button>
+                        <button id="search-missing-progress-btn" class="btn-small" title="Search for missing spell progress">Missing Progress</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1008,40 +1089,16 @@
             </div>
             <br>
             <div id="progress-view">
-                <button id="progress-button">View Progress</button>
+                <button id="progress-button">Open Progress ▶</button>
             </div>
         </div>
 
-        <div id="perks-ui-container" style="font-weight:bold; font-size:14px; margin-bottom:5px; border-top:1px solid #444;">
-            <label id="perks-label" style="text-decoration: underline;">Perk Deck ▼</label>
-            <div id="perks-data" style="display:none;">
-                <div class="pw-control">
-                    <button id="prev-pw" class="reroll-btn" title="West">&lt;</button>
-                    <h3 id="pw-label">Main World</h3>
-                    <button id="next-pw" class="reroll-btn" title="East">&gt;</button>
-                </div>
-                <div class="header-options">
-                    <label class="ac-toggle" title="Show what Always Cast would be in every position">
-                        <input type="checkbox" id="show-always-casts"> All ACs
-                    </label>
-                    <div class="lottery-control">
-                        <label for="lottery-count" title="Perk Lottery Pickups">(Global) Perk Lotteries:</label>
-                        <input type="number" id="lottery-count" value="0" min="0" max="7">
-                    </div>
-                    <button id="reset-btn" class="reroll-btn reset-btn">Reset</button>
-                </div>
-                <div id="temple-list" class="temple-list">
-                    <!-- Perk rows for each holy mountain will be injected here -->
-                </div>
-                <small class="help-text">Work in progress, think of it as a simulation of the perk deck, doesn't affect the generation like the perk settings above, and gets reset if any settings change.</small>
-            </div>
+        <div id="perks-ui-container" style="margin-bottom:5px; border-top:1px solid #444; padding-top:10px;">
+            <button id="perk-deck-button">Open Perk Deck ▶</button>
         </div>
 
-        <div id="fungal-shifts-container" style="font-weight:bold; font-size:14px; margin-bottom:5px; border-top:1px solid #444;">
-            <label id="fungal-shifts-label" style="text-decoration: underline;">Fungal Shifts ▼</label>
-            <ul id="shifts-list" class="shift-list" style="display:none;">
-                <!-- Shifts will be injected here -->
-            </ul>
+        <div id="fungal-shifts-container" style="margin-bottom:5px; border-top:1px solid #444; padding-top:10px;">
+            <button id="fungal-shifts-button">Open Fungal Shifts ▶</button>
         </div>
 
         <div id="alchemy-container" style="font-weight:bold; font-size:14px; margin-bottom:5px; border-top:1px solid #444;">
@@ -1106,6 +1163,7 @@
 
         <span class="debug-toggle" style="margin-top: 10px; border-top: 1px solid #444; padding-top: 10px;" title="Show or hide options which you probably will not need to enable for normal use">Debug Options...</span>
         <div id="debug-options">
+            <label class="debug-opt" title="Accessibility mode"><input type="checkbox" id="accessibility-mode"> Accessibility Mode</label>
             <label class="debug-opt" title="Display approximate wand sprite rarity in PoIs."><input type="checkbox" id="show-wand-sprite-rarity" checked> Show Wand Sprite Rarity</label>
             <label class="debug-opt" title="There is a single *unique* pixel scene in the game, which is the Shrine pixel scene in the Collapsed Mines. Being unique, once you visit/load it, it permanently alters the spawn probability of other pixel scenes in the Collapsed Mines on your run. Only the Collapsed Mines version of this scene is unique, the Mines version is not. If the pixel scenes predicted for the Collapsed Mines are incorrect, it's probably because you need to toggle this setting."><input type="checkbox" id="visited-coalmine-alt-shrine"> Visited Collapsed Mine Shrine</label>
             <label class="debug-opt" title="Exclude Taikasauva Spawns from the map. Taikasauvas are a source of wands and spells, but they can be somewhat inconsistent because they have a tendency to randomly unload."><input type="checkbox" id="exclude-taikasauva"> Exclude Natural Taikasauva Spawns</label>
@@ -1172,6 +1230,52 @@
                 </div>
             </div>
             <div id="progress-lists"></div>
+        </div>
+        <div id="fungal-shifts-overlay" role="dialog" aria-modal="true" aria-labelledby="fungal-shifts-title">
+            <div class="progress-header">
+                <h2 id="fungal-shifts-title">Fungal Shifts</h2>
+                <button id="fungal-shifts-close" class="progress-close" title="Close fungal shifts" aria-label="Close fungal shifts">&times;</button>
+            </div>
+            <ul id="shifts-list" class="shift-list fungal-shifts-list">
+                <!-- Fungal shifts will be injected here -->
+            </ul>
+        </div>
+        <div id="perk-deck-overlay" role="dialog" aria-modal="true" aria-labelledby="perk-deck-title">
+            <div class="progress-header">
+                <h2 id="perk-deck-title">Perk Deck</h2>
+                <button id="perk-deck-close" class="progress-close" title="Close perk deck" aria-label="Close perk deck">&times;</button>
+            </div>
+            <div id="perks-data">
+                <div class="pw-control">
+                    <button id="prev-pw" class="reroll-btn" title="West">&lt;</button>
+                    <h3 id="pw-label">Main World</h3>
+                    <button id="next-pw" class="reroll-btn" title="East">&gt;</button>
+                </div>
+                <div class="header-options">
+                    <label class="ac-toggle" title="Show what Always Cast would be in every position">
+                        <input type="checkbox" id="show-always-casts"> All ACs
+                    </label>
+                    <div class="lottery-control">
+                        <label for="lottery-count" title="Perk Lottery Pickups">(Global) Perk Lotteries:</label>
+                        <input type="number" id="lottery-count" value="0" min="0" max="7">
+                    </div>
+                    <button id="reset-btn" class="reroll-btn reset-btn">Reset</button>
+                </div>
+                <div id="temple-list" class="temple-list">
+                    <!-- Perk rows for each holy mountain will be injected here -->
+                </div>
+                <button id="reroll-deck-toggle" class="btn-small reroll-deck-toggle" type="button"></button>
+                <div id="reroll-deck-list" class="reroll-deck-list" hidden></div>
+                <div class="settings-group" style="margin-top:12px;">
+                    <label>Sync Perks:</label>
+                    <small class="help-text">This is intended for syncing perks after entering NG+, to cover all the perks taken in the previous NG+ loops, and cannot tell which perks have already been taken from holy mountains in the current loop. Copy the save folder path, then upload player.xml to import taken perks. </small>
+                    <div style="display: flex; flex-direction: row; align-items: center; gap: 10px; padding-top: 5px;">
+                        <button id="player-copy-path-btn">Copy Path</button>
+                        <input type="file" id="player-file-picker" accept=".xml,text/xml" style="display:none;">
+                        <button onclick="document.getElementById('player-file-picker').click()">Upload Player File</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
