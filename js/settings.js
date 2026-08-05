@@ -22,6 +22,11 @@ export const appSettings = {
 	accessibilityMode: false,
 	date: null,
 	spellFlags: [],
+	// Special flags
+	sunGem: false,
+	darksunGem: false,
+	sunState: false,
+	darksunState: false,
 	// UI related options are not included here, this is mainly for settings which the web workers will need
 }
 
@@ -60,4 +65,17 @@ export function updateSettingsFromUI() {
 export function updateSpellFlags(spells) {
 	appSettings.spellFlags = spells;
 	console.log(appSettings.spellFlags);
+}
+
+export function updateSpecialFlags(specialFlags) {
+	appSettings.sunGem = specialFlags.sunGem ?? appSettings.sunGem;
+	appSettings.darksunGem = specialFlags.darksunGem ?? appSettings.darksunGem;
+	appSettings.sunState = specialFlags.sunState ?? appSettings.sunState;
+	appSettings.darksunState = specialFlags.darksunState ?? appSettings.darksunState;
+	console.log('Updated special flags:', {
+		sunGem: appSettings.sunGem,
+		darksunGem: appSettings.darksunGem,
+		sunState: appSettings.sunState,
+		darksunState: appSettings.darksunState,
+	});
 }

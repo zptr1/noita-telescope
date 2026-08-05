@@ -17,7 +17,7 @@ import { debugBiomeEdgeNoise } from './edge_noise.js';
 import { getPixelSceneCanvas, loadPixelSceneData, reloadPixelSceneCache, PIXEL_SCENE_DATA } from './pixel_scene_generation.js';
 import { addStaticPixelScenes } from './static_spawns.js';
 import { NollaPrng } from './nolla_prng.js';
-import { appSettings, updateSettings, updateSpellFlags } from './settings.js';
+import { appSettings, updateSettings, updateSpellFlags, updateSpecialFlags } from './settings.js';
 import { syncWorldWorkerData, getOrGenerateWorld, syncSettingsToWorldWorker } from './world_manager.js';
 import { syncOverlayWorkerData, getOrGenerateOverlay, syncSettingsToOverlayWorker, recolorPixelScenes, invalidatePendingOverlays } from './overlay_manager.js';
 import { getBiomeModifiers, getStartingWeather } from './misc_generation.js';
@@ -633,6 +633,7 @@ export const app = {
 
 			const foundFlags = new Set();
 			const actionFlags = new Set();
+			const specialFlags = {};
 
 			for (const file of fileList) {
 				let name = file.name.toLowerCase();
@@ -642,6 +643,12 @@ export const app = {
 					name = name.replace("card_unlocked_", "");
 				}
 				foundFlags.add(name);
+
+				// Extra bonus flags just for fun
+				if (name === 'progress_sun') specialFlags['sunGem'] = true;
+				if (name === 'progress_darksun') specialFlags['darksunGem'] = true;
+				if (name === 'moon_is_sun') specialFlags['sunState'] = true;
+				if (name === 'darkmoon_is_darksun') specialFlags['darksunState'] = true;
 			}
 
 			Object.keys(UNLOCKABLES).forEach(flagKey => {
@@ -652,6 +659,8 @@ export const app = {
 
 			// Save spells to settings too
 			updateSpellFlags(Array.from(actionFlags));
+
+			updateSpecialFlags(specialFlags);
 			
 			this.unlocksChanged = true;
 			this.saveSettings();
@@ -1843,6 +1852,10 @@ export const app = {
 			"cauldron_room_broken": await loadPNGBitmap('../data/biome_maps/custom/cauldron_room_broken.png'),
 			"moon": await loadPNGBitmap('../data/biome_maps/custom/moon.png'),
 			"darkmoon": await loadPNGBitmap('../data/biome_maps/custom/darkmoon.png'),
+			"scale_empty": await loadPNGBitmap('../data/biome_maps/custom/scale_empty.png'),
+			"scale_light": await loadPNGBitmap('../data/biome_maps/custom/scale_light.png'),
+			"scale_dark": await loadPNGBitmap('../data/biome_maps/custom/scale_dark.png'),
+			"scale_balanced": await loadPNGBitmap('../data/biome_maps/custom/scale_balanced.png'),
 		};
 		
 		this.weatherOverlays = {
@@ -2206,6 +2219,46 @@ export const app = {
 			this.ctx.restore(); // Restore the camera transform for the rest of your rendering
 		}
 
+		// Scales
+		if (this.gameMode !== 'nightmare' && this.ngPlusCount === 0) {
+			const scaleOffsetX = 25*512;
+			const scaleOffsetY = -256;
+			for (let worldKey of this.worldsInView) {
+				const { pwX, pwY, shiftX, shiftY } = worldOffsets[worldKey];
+				if (pwY === 0) {
+					if (pwX === 0) {
+						// Scale variants based on sun/darksun gem unlocks
+						if (appSettings.sunGem && appSettings.darksunGem) {
+							if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_balanced']) {
+								this.ctx.drawImage(this.surfaceOverlayScenes['scale_balanced'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+							}
+						}
+						else if (appSettings.sunGem) {
+							if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_light']) {
+								this.ctx.drawImage(this.surfaceOverlayScenes['scale_light'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+							}
+						}
+						else if (appSettings.darksunGem) {
+							if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_dark']) {
+								this.ctx.drawImage(this.surfaceOverlayScenes['scale_dark'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+							}
+						}
+						else {
+							if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_empty']) {
+								this.ctx.drawImage(this.surfaceOverlayScenes['scale_empty'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+							}
+						}
+					}
+					else {
+						// Broken scale otherwise
+						if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_empty']) {
+							this.ctx.drawImage(this.surfaceOverlayScenes['scale_empty'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+						}
+					}
+				}
+			}
+		}
+		
 		// Moons
 		if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['moon'] && this.surfaceOverlayScenes['darkmoon']) {
 			this.ctx.drawImage(this.surfaceOverlayScenes['moon'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512, -37*512 - this.pwVertical * 24576 - 32, 512, 540);
@@ -2213,6 +2266,8 @@ export const app = {
 				this.ctx.drawImage(this.surfaceOverlayScenes['darkmoon'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512, 87*512 - this.pwVertical * 24576 + 128, 512, 512);
 			}
 		}
+
+		// TODO: Suns, when the custom art is made
 
 		// Stars
 		renderStars(this.ctx, this.seed, this.ngPlusCount, this.pw, this.pwVertical);
@@ -2977,6 +3032,10 @@ export const app = {
 			//extraRerolls: parseInt(document.getElementById('debug-extra-rerolls').value),
 			//rngInfo: document.getElementById('debug-rng-info').checked,
 			accessibilityMode: document.getElementById('accessibility-mode').checked,
+			sunGem: appSettings.sunGem,
+			darksunGem: appSettings.darksunGem,
+			sunState: appSettings.sunState,
+			darksunState: appSettings.darksunState,
 		};
 		// Unlock settings
 		const unlockSettings = {};

@@ -593,6 +593,7 @@ export const GENERAL_SCENES = {
 		{name: "orbroom"},
 		{name: "secret_lab"},
 		{name: "essenceroom"},
+		{name: "essenceroom_submerged"},
 		{name: "alchemist_secret"},
 		{name: "alchemist_secret_music"},
 		{name: "boss_victoryroom"},
@@ -612,6 +613,8 @@ export const GENERAL_SCENES = {
 		{name: "lavalake_pit_cracked"},
 		{name: "cauldron"},
 		{name: "clean_entrance"},
+		{name: "scale"},
+		{name: "scale_old"},
 	]
 }
 
@@ -623,8 +626,6 @@ export const OVERWORLD_SCENES = {
 		{name: "cliff"},
 		{name: "desert_ruins_base_01"},
 		{name: "music_machine_stand"},
-		{name: "scale"},
-		{name: "scale_old"},
 	]
 }
 

@@ -70,7 +70,7 @@ export const PIXEL_SCENE_BIOMES = {
 	0xff57cace: {biome: "ocarina", name: "ocarina"},
 	0xff157cb0: {biome: "essenceroom", name: "essenceroom"},
 	0xff157cb5: {biome: "essenceroom_hell", name: "essenceroom"},
-	0xff157cb6: {biome: "essenceroom_alc", name: "essenceroom"},
+	0xff157cb6: {biome: "essenceroom_alc", name: "essenceroom_submerged"},
 	0xff157cb8: {biome: "essenceroom_air", name: "essenceroom"},
 	0xffffd100: {biome: "orbroom_00", name: "orbroom"},
 	0xffffd101: {biome: "orbroom_01", name: "orbroom"},
@@ -84,8 +84,8 @@ export const PIXEL_SCENE_BIOMES = {
 	0xffffd109: {biome: "orbroom_09", name: "orbroom"},
 	0xffffd110: {biome: "orbroom_10", name: "orbroom"},
 	0xffffd111: {biome: "orbroom_11", name: "orbroom"},
-	0xff1f3b62: {biome: "mestari_secret", name: "orbroom"},
-	0xff1f3b64: {biome: "ghost_secret", name: "orbroom"},
+	0xff1f3b62: {biome: "mestari_secret", name: "secret_lab"},
+	0xff1f3b64: {biome: "ghost_secret", name: "secret_lab"},
 	0xff57dace: {biome: "alchemist_secret", name: "alchemist_secret"},
 	0xff0a95a4: {biome: "funroom", name: "funroom"},
 	0xff567cb0: {biome: "moon_room", name: "essenceroom"},
@@ -197,6 +197,7 @@ export function addStaticPixelScenes(ws, ng, pwIndex, pwIndexVertical, biomeData
 
 	// Something small: Scale based on unlocks?
 	// Meh not too important, I'll just use the fully unlocked version
+	// TODO But not a priority for me since the custom art is preferable anyway
 
 	let hiisiHourglassPosition = null;
 
