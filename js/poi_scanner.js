@@ -156,7 +156,10 @@ function getPixelSceneSpawnFunctionIndices(biomeData, biomeName, pixelScene, wor
                     x: spawnX,
                     y: spawnY,
                     spawnFunctionIndex: index,
-                    fromPixelScene: true
+                    fromPixelScene: true,
+                    // The game resolves the spawn biome for the whole scene at its center
+                    sceneCenterX: pixelScene.x + Math.floor(pixelScene.width / 2),
+                    sceneCenterY: pixelScene.y + Math.floor(pixelScene.height / 2)
                 });
             }
         }
@@ -365,17 +368,21 @@ export function scanSpawnFunctions(biomeData, tileSpawns, worldSeed, ngPlusCount
             const srcFn = (BIOME_SPAWN_FUNCTION_MAP[spawn.sourceBiome] || [])[spawn.spawnFunctionIndex];
             const srcFnName = srcFn ? srcFn.funcName : null;
             if (spawn.fromPixelScene) {
-                // Is this the right exception?
-                if (ORIGINAL_BIOME_SPAWNS.has(srcFnName)) {
-                    // Seems that this original spawn exception needs to be kept for pixel scene spawns?
-                    // At least this applies to wand and potion altars, unclear whether it also applies to nested pixel scene stuff in biome overlaps
-                    targetBiome = spawn.sourceBiome;
+                // The game resolves one biome for the entire pixel scene at its center (with
+                // edge noise applied) and runs all of the scene's spawn functions in that
+                // biome. If that biome has no handler for the function (e.g. solid_wall),
+                // nothing spawns even though the scene itself is placed.
+                const ccx = spawn.sceneCenterX ?? spawn.x, ccy = spawn.sceneCenterY ?? spawn.y;
+                const target = getBiomeAtWorldCoordinates(biomeData, ccx, ccy, ngPlusCount > 0, gameMode, true);
+                const centerBiome = target ? target.biome : null;
+                if (centerBiome && centerBiome !== spawn.sourceBiome) {
+                    // Function indices differ per biome, so re-look up by color
+                    const color = srcFn ? srcFn.color : null;
+                    const newIdx = color != null ? getSpawnFunctionIndex(centerBiome, color) : null;
+                    if (newIdx === null || newIdx === undefined) return;
+                    spawn.spawnFunctionIndex = newIdx;
                 }
-                else {
-                    // Pixel-scene-internal spawns resolve their biome through the wobbled chunk lookup.
-                    const target = getBiomeAtWorldCoordinates(biomeData, spawn.x, spawn.y, ngPlusCount > 0, gameMode, true);
-                    targetBiome = target ? target.biome : null;
-                }
+                targetBiome = centerBiome;
             } else if (ORIGINAL_BIOME_SPAWNS.has(srcFnName)) {
                 // Exception spawn functions that use their original biome
                 const resolved = getResolvedBiome(biomeData, spawn.x, spawn.y, ngPlusCount > 0, gameMode);
