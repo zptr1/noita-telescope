@@ -323,7 +323,8 @@ export function spawnSwitch(biomeData, biomeName, functionIndex, ws, ng, x, y, s
 		}
 		else if (func === "spawn_receptacle_oil") {
 			const wand = spawnSpecialWand(ws, ng, x + 72, y - 22, "ruusu");
-			return {type: 'puzzle', materials: 'oil', items: [wand, {type: 'item', item: 'oil_receptacle_puzzle', x: x, y: y, ignore: true}], x: x + 72, y: y - 22}; // Include dummy item for searching
+			const potion = {type: 'item', item: 'potion_empty', x: x + 72, y: y - 17};
+			return {type: 'puzzle', materials: 'oil', items: [wand, potion, {type: 'item', item: 'oil_receptacle_puzzle', x: x, y: y, ignore: true}], x: x + 72, y: y - 22}; // Include dummy item for searching
 		}
 		else if (func === "spawn_potion" || func === "spawn_props3") {
 			let r = prng.Next() * 0.4; //prng.ProceduralRandom(ws + ng, x, y) * 0.4;

@@ -159,6 +159,7 @@ const EXTRA_TRANSLATIONS = {
 	'runestone_emptiness': 'Runestone of Emptiness',
 	'runestone_edges': 'Runestone of Edges',
 	'runestone_metal': 'Runestone of Metal',
+	'potion_empty': 'Empty Potion',
 	'mimic_potion': 'Potion Mimic',
 	'refresh_mimic': 'Refresh Mimic',
 	'heart_mimic': 'Heart Mimic',
