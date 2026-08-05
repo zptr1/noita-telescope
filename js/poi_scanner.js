@@ -384,7 +384,11 @@ export function scanSpawnFunctions(biomeData, tileSpawns, worldSeed, ngPlusCount
                 }
                 targetBiome = centerBiome;
             } else if (ORIGINAL_BIOME_SPAWNS.has(srcFnName)) {
-                // Exception spawn functions that use their original biome
+                // Exception spawn functions that use their original biome, but the
+                // biome edge drop at the scan point still applies
+                const sp = getTileScanPoint(spawn.x, spawn.y);
+                const spResolved = getResolvedBiome(biomeData, sp.x, sp.y, ngPlusCount > 0, gameMode);
+                if (spResolved.biome !== spResolved.origBiome) return;
                 const resolved = getResolvedBiome(biomeData, spawn.x, spawn.y, ngPlusCount > 0, gameMode);
                 targetBiome = resolved.origBiome;
             } else {
