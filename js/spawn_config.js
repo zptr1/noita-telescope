@@ -223,7 +223,7 @@ export const ALTAR_SPAWN_DATA = {
         y: -9,
         xoff: -11.431,
         yoff: 10.5257,
-        rp: 0.01,
+        rp: 0.65,
         px: 5,
         py: -4
     },

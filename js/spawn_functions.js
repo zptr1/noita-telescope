@@ -646,6 +646,12 @@ export function spawnSwitch(biomeData, biomeName, functionIndex, ws, ng, x, y, s
 			return generateShopItem(ws, ng, x, y, BIOME_TIERS[biomeName], 0);
 		}
 	}
+	else if (biomeName === "wandcave") {
+		if (func === "spawn_potions" || func === "spawn_wands") {
+			// Wandcave disables these functions despite having spawn pixels for them
+			return null;
+		}
+	}
 	else if (biomeName === "biome_watchtower" || biomeName === "biome_barren" || biomeName === "biome_potion_mimics" || biomeName === "biome_darkness" || biomeName === "biome_boss_sky") {
 		// I thought these would make cool overlaps but I think they're not actually possible at all, the cloudscape doesn't have much, and the watchtower isn't in NG+, and even if it was it wouldn't overlap with any of these
 		/*
