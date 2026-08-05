@@ -13,13 +13,13 @@ export function generateUtilityBox(ws, ng, x, y, perks={}, gameMode='normal') {
 	let count = 1;
 	while (count > 0) {
 		count--;
-		let rnd = prng.Random(0, 100);
+		let rnd = prng.Random(1, 100);
 		if (rnd <= 2) {
 			items.push({type: 'item', item: 'bomb', x: x, y: y});
 		}
 		else if (rnd <= 5) {
 			rnd = prng.Random(0, 100);
-			if (rnd == 99) {
+			if (rnd > 98) {
 				items.push({type: 'item', item: 'refresh_mimic', x: x, y: y});
 			}
 			else {
@@ -81,9 +81,9 @@ export function generateUtilityBox(ws, ng, x, y, perks={}, gameMode='normal') {
 				amount += 4;
 			}
 
-			for (let i = 0; i < amount; i++) {
-				prng.Next();
-				items.push({...MakeRandomUtilitySpell(prng), x: x, y: y});
+			for (let i = 1; i <= amount; i++) {
+				const yJitter = prng.Random(-5, 5);
+				items.push({...MakeRandomUtilitySpell(prng), x: x + (i - amount / 2) * 8, y: y - 4 + yJitter});
 			}
 		}
 		else if (rnd <= 99) {
