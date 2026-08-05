@@ -331,7 +331,7 @@ export function loadRandomPixelScene(biomeData, biomeName, scene_list, ws, ng, x
 					[x + w, y + h],
 				];
 				for (const [cx, cy] of corners) {
-					const res = getBiomeAtWorldCoordinates(biomeData, cx, cy, ng > 0, gameMode);
+					const res = getBiomeAtWorldCoordinates(biomeData, cx, cy, ng > 0, gameMode, true);
 					// Reject if the corner's wobbled biome is different (including null)
 					if (res.biome !== biomeName) {
 						return null;
