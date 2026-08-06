@@ -2,9 +2,8 @@ import { NollaPrng } from './nolla_prng.js';
 import { stbhw_generate_image, stbhw_build_tileset_from_image, StbhwTileset, stbhw_set_prng } from './stbhw.js';
 import { applyMainBiomeHack, applyCoalmineHack, applyPostprocessingHacks, undoCoalmineHack } from './biome_hacks.js';
 import { blockOutRooms } from './pixel_scene_generation.js';
-import { findMinPath } from './pathfinding.js';
+import { findMinPath, getPathStartSegment, usesMinesTemplate } from './pathfinding.js';
 import { CHUNK_SIZE, TILE_SIZE } from './constants.js';
-import { getWorldCenter } from './utils.js';
 
 //import { spawnWandAltar, spawnPotionAltar, spawnChest, spawnHeart } from './spell_generator.js';
 
@@ -71,7 +70,7 @@ function getCachedTileset(biomeName, wangData) {
     return ts;
 }
 
-function generateRawTileBuffer(regionPoints, bbox, wangData, worldSeed, ngPlus, extraRerolls, biomeName, gameMode='normal') {
+function generateRawTileBuffer(regionPoints, bbox, wangData, worldSeed, ngPlus, extraRerolls, biomeName, gameMode='normal', wangFile='') {
     const minX = bbox[0];
     const minY = bbox[1];
     //const [minX, minY, maxX, maxY] = bbox;
@@ -108,21 +107,22 @@ function generateRawTileBuffer(regionPoints, bbox, wangData, worldSeed, ngPlus, 
     if (!tile_indices) return null;
 
     // Missing step: block out rooms related to pixel scenes
-    let shouldBlockOutRooms = biomeName === 'coalmine' || biomeName === 'excavationsite' || biomeName === 'solid_wall_tower_1';
+    // Keyed on the wang template, so the towers built from those templates get it too.
+    const isMines = usesMinesTemplate(wangFile);
+    let shouldBlockOutRooms = isMines || (!!wangFile && wangFile.endsWith('excavationsite.png'));
     let pixelSceneRooms = [];
     if (shouldBlockOutRooms) {
         pixelSceneRooms = blockOutRooms(rawBuffer, mapW, outH);
     }
-    
-    //if (isMainBiome) applyMainBiomeHack(rawBuffer, mapW, outH, biomeName, ngPlus > 0);
-    //console.log(`${biomeName} - ${bbox[0]},${bbox[2]} to ${bbox[1]},${bbox[3]} - Main biome: ${isMainBiome} - Pathfinding attempts: ${extraRerolls}`);
-    // Apparently doesn't need to be main biome, just needs to be in the right range
-    // Previous: if (isMainBiome && ...)
-    if (bbox[0] <= getWorldCenter(ngPlus > 0, gameMode) && bbox[2] >= getWorldCenter(ngPlus > 0, gameMode)) {
-        applyMainBiomeHack(bbox[0], rawBuffer, mapW, outH, biomeName, ngPlus > 0, gameMode);
+
+    // Where the path is forced to start, and the area cleared for it. The mines
+    // template starts at a fixed tile instead and clears nothing.
+    const pathStart = getPathStartSegment(bbox, mapW, mapH, wangFile, ngPlus > 0, gameMode);
+    if (pathStart && !isMines) {
+        applyMainBiomeHack(pathStart.x, rawBuffer, mapW, outH);
     }
     // Nightmare doesn't have coalmine hack
-    if ((biomeName === 'coalmine' || biomeName === 'solid_wall_tower_1') && gameMode !== 'nightmare') {
+    if (isMines && gameMode !== 'nightmare') {
         applyCoalmineHack(rawBuffer, mapW, outH, 'coalmine');
     }
 
@@ -136,8 +136,9 @@ function generateRawTileBuffer(regionPoints, bbox, wangData, worldSeed, ngPlus, 
         tileSize: ts.short_side_len, 
         numHTiles: ts.num_h_tiles,
         numVTiles: ts.num_v_tiles,
-        minX, minY, mapH, 
-        pixelSceneRooms: pixelSceneRooms
+        minX, minY, mapH,
+        pixelSceneRooms: pixelSceneRooms,
+        pathStart: pathStart
     };
 }
 
@@ -331,11 +332,11 @@ export async function generateBiomeTiles(biomePixels, width, height, biomeConfig
             let finalPath = null;
 
             while (!valid && attempts < MAX_PATHFINDING_ATTEMPTS) {
-                rawResult = generateRawTileBuffer(regions[i], bboxes[i], conf.wangData, worldSeed, ngPlus, currentRerolls, biomeName, gameMode);
+                rawResult = generateRawTileBuffer(regions[i], bboxes[i], conf.wangData, worldSeed, ngPlus, currentRerolls, biomeName, gameMode, conf.wangFile);
                 if (!rawResult) break;
-                let path = (1 + bboxes[i][3] - bboxes[i][1] > BIOME_PATH_HEIGHT_LIMIT_CHUNKS) ? [] : findMinPath(bboxes[i], rawResult.buffer, rawResult.width, rawResult.height, biomeName, ngPlus > 0, gameMode);
+                let path = (1 + bboxes[i][3] - bboxes[i][1] > BIOME_PATH_HEIGHT_LIMIT_CHUNKS) ? [] : findMinPath(rawResult.buffer, rawResult.width, rawResult.height, rawResult.pathStart);
                 if (BYPASS_PATHFINDING && !path) path = [];
-                if (path) { valid = true; finalPath = path; } 
+                if (path) { valid = true; finalPath = path; }
                 else { currentRerolls++; attempts++; }
             }
 
@@ -343,7 +344,7 @@ export async function generateBiomeTiles(biomePixels, width, height, biomeConfig
 
             if (attempts == MAX_PATHFINDING_ATTEMPTS) {
                 console.warn(`[Generator] Failed to generate valid tile buffer for ${biomeName} after ${MAX_PATHFINDING_ATTEMPTS} attempts`);
-                rawResult = generateRawTileBuffer(regions[i], bboxes[i], conf.wangData, worldSeed, ngPlus, currentRerolls, biomeName, gameMode);
+                rawResult = generateRawTileBuffer(regions[i], bboxes[i], conf.wangData, worldSeed, ngPlus, currentRerolls, biomeName, gameMode, conf.wangFile);
                 valid = true;
                 finalPath = [];
             }
@@ -364,7 +365,7 @@ export async function generateBiomeTiles(biomePixels, width, height, biomeConfig
                 }
 
                 // Replace coalmine hack blocked area with air
-                if ((biomeName === 'coalmine' || biomeName === 'solid_wall_tower_1') && gameMode !== 'nightmare') {
+                if (usesMinesTemplate(conf.wangFile) && gameMode !== 'nightmare') {
                     undoCoalmineHack(rawResult.buffer, rawResult.width, rawResult.height, 'coalmine');
                 }
 
