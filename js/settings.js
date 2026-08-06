@@ -20,6 +20,11 @@ export const appSettings = {
 	greedCurse: false,
 	extraItemsInHolyMountain: 0,
 	accessibilityMode: false,
+	simplePoiSymbols: false,
+	poiScale: 1,
+	scalePoisWithZoom: false,
+	highlightPoiScale: 1,
+	scaleHighlightedPoisWithZoom: true,
 	date: null,
 	spellFlags: [],
 	// Special flags
@@ -58,6 +63,11 @@ export function updateSettingsFromUI() {
 		greedCurse: document.getElementById('greed-curse')?.checked || false,
 		extraItemsInHolyMountain: parseInt(document.getElementById('extra-shop-items')?.value) || 0,
 		accessibilityMode: document.getElementById('accessibility-mode')?.checked || false,
+		simplePoiSymbols: document.getElementById('debug-simple-poi-symbols')?.checked || false,
+		poiScale: parseFloat(document.getElementById('debug-poi-scale')?.value) || 1,
+		scalePoisWithZoom: document.getElementById('debug-pois-zoom')?.checked || false,
+		highlightPoiScale: parseFloat(document.getElementById('debug-highlight-poi-scale')?.value) || 1,
+		scaleHighlightedPoisWithZoom: document.getElementById('debug-highlight-pois-zoom')?.checked ?? true,
 	};
 	updateSettings(newSettings);
 }

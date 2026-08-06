@@ -647,6 +647,7 @@ export function spawnSwitch(biomeData, biomeName, functionIndex, ws, ng, x, y, s
 			return generateShopItem(ws, ng, x, y, BIOME_TIERS[biomeName], 0);
 		}
 	}
+	// TODO: Generalize this better, it applies to many side biomes.
 	else if (biomeName === "wandcave") {
 		if (func === "spawn_potions" || func === "spawn_wands") {
 			// Wandcave disables these functions despite having spawn pixels for them

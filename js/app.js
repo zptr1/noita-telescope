@@ -29,6 +29,33 @@ import { renderStars } from './star_decorations.js';
 import { getFungalShifts } from './fungal_shifts.js';
 import { pickAlchemyMaterials } from './alchemy.js';
 
+function getPoiRadius(poi, zoom) {
+	let radius = POI_RADIUS;
+	if (poi.type === 'enemies' || poi.type === 'props') {
+		radius /= 2.0;
+		for (const item of poi.items) {
+			if (item.type === 'wand') {
+				radius = POI_RADIUS;
+				break;
+			}
+		}
+	}
+
+	const isHighlighted = poi.highlight === true;
+	const scaleInput = document.getElementById(isHighlighted ? 'debug-highlight-poi-scale' : 'debug-poi-scale');
+	const zoomInput = document.getElementById(isHighlighted ? 'debug-highlight-pois-zoom' : 'debug-pois-zoom');
+	const scaleFactor = Number.parseFloat(scaleInput?.value) || 1;
+	if (zoomInput?.checked) {
+		radius = POI_RADIUS / zoom;
+		// It's way too big when zoomed
+		radius *= 0.25;
+	}
+	if (isHighlighted) {
+		radius *= 3.0; // Highlighted POIs are bigger
+	}
+	return radius * scaleFactor;
+}
+
 
 export const app = {
 	// TODO: A lot of these are old and unused and could probably be cleaned up
@@ -374,6 +401,19 @@ export const app = {
 		document.getElementById('debug-rng-info').onchange = () => {this.saveSettings(); this.draw();};
 		document.getElementById('debug-original-biome-map').onchange = () => {this.saveSettings(); this.draw();};
 		document.getElementById('debug-small-pois').onchange = () => {this.saveSettings(); this.draw();};
+		for (const [inputId, outputId] of [
+			['debug-poi-scale', 'debug-poi-scale-value'],
+			['debug-highlight-poi-scale', 'debug-highlight-poi-scale-value'],
+		]) {
+			const input = document.getElementById(inputId);
+			input.oninput = () => {
+				document.getElementById(outputId).textContent = `${Number.parseFloat(input.value).toFixed(1)}x`;
+				this.saveSettings();
+				this.draw();
+			};
+		}
+		document.getElementById('debug-pois-zoom').onchange = () => {this.saveSettings(); this.draw();};
+		document.getElementById('debug-highlight-pois-zoom').onchange = () => {this.saveSettings(); this.draw();};
 		document.getElementById('debug-fix-holy-mountain-edge-noise').onchange = () => {this.saveSettings(); this.generate(true, true);};
 		document.getElementById('debug-block-edge-spawns').onchange = () => {this.saveSettings(); this.generate(true, true);};
 		document.getElementById('show-enemy-spawns').onchange = () => {this.saveSettings(); this.generate(true, true);};
@@ -428,6 +468,10 @@ export const app = {
 			reloadPixelSceneCache().then(() => this.generate(true, true));
 		};
 		document.getElementById('accessibility-mode').onchange = () => {
+			this.saveSettings();
+			this.draw();
+		}
+		document.getElementById('debug-simple-poi-symbols').onchange = () => {
 			this.saveSettings();
 			this.draw();
 		}
@@ -1313,23 +1357,7 @@ export const app = {
 			const poiHit = currentPois.find(p => {
 				const px = p.x + getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * 512 * this.w;
 				const py = p.y + 14 * 512 - this.pwVertical * 24576;
-				let tempRadius = POI_RADIUS;
-				if (p.type === 'enemies' || p.type === 'props') {
-					tempRadius /= 2.0;
-					for (let item of p.items) {
-						if (item.type === 'wand') {
-							tempRadius = POI_RADIUS;
-							break;
-						}
-					}
-				}
-				if (p.highlight) {
-					tempRadius = POI_RADIUS / this.cam.z;
-					if (tempRadius < POI_RADIUS) tempRadius = POI_RADIUS;
-				}
-				if (document.getElementById('accessibility-mode').checked) {
-					tempRadius *= 1.5; // Increase hit radius for accessibility mode
-				}
+				let tempRadius = getPoiRadius(p, this.cam.z);
 				if (document.getElementById('debug-small-pois').checked) {
 					tempRadius = 5.0;
 				}
@@ -1609,7 +1637,7 @@ export const app = {
 
 			// Generate static info
 			const weather = getStartingWeather(seedVal, ngVal);
-			console.log("Starting Weather:", weather);
+			//console.log("Starting Weather:", weather);
 			this.weather = weather;
 
 			const biomeModifiers = getBiomeModifiers(seedVal, ngVal, weather.snowing);
@@ -1856,6 +1884,8 @@ export const app = {
 			"scale_light": await loadPNGBitmap('../data/biome_maps/custom/scale_light.png'),
 			"scale_dark": await loadPNGBitmap('../data/biome_maps/custom/scale_dark.png'),
 			"scale_balanced": await loadPNGBitmap('../data/biome_maps/custom/scale_balanced.png'),
+			"sun": await loadPNGBitmap('../data/biome_maps/custom/sun.png'),
+			"darksun": await loadPNGBitmap('../data/biome_maps/custom/darksun.png'),
 		};
 		
 		this.weatherOverlays = {
@@ -2258,16 +2288,32 @@ export const app = {
 				}
 			}
 		}
-		
-		// Moons
-		if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['moon'] && this.surfaceOverlayScenes['darkmoon']) {
-			this.ctx.drawImage(this.surfaceOverlayScenes['moon'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512, -37*512 - this.pwVertical * 24576 - 32, 512, 540);
-			if (this.gameMode !== 'nightmare') {
-				this.ctx.drawImage(this.surfaceOverlayScenes['darkmoon'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512, 87*512 - this.pwVertical * 24576 + 128, 512, 512);
+
+		// Moons and Suns
+		if (appSettings.sunState) {
+			if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['sun']) {
+				this.ctx.drawImage(this.surfaceOverlayScenes['sun'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512 - 7.5*512, -37*512 - this.pwVertical * 24576 - 32 - 7.5*512, 16*512, 16*512);
 			}
 		}
-
-		// TODO: Suns, when the custom art is made
+		else {
+			if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['moon']) {
+				this.ctx.drawImage(this.surfaceOverlayScenes['moon'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512, -37*512 - this.pwVertical * 24576 - 32, 512, 540);
+			}
+		}
+		if (this.gameMode !== 'nightmare') {
+			// Why is it not in Nightmare? So weird.
+			if (appSettings.darksunState) {
+				if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['darksun']) {
+					this.ctx.drawImage(this.surfaceOverlayScenes['darksun'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512 - 7.5*512, 87*512 - this.pwVertical * 24576 + 128 - 7.5*512, 16*512, 16*512);
+				}
+			}
+			else {
+				
+				if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['darkmoon']) {
+					this.ctx.drawImage(this.surfaceOverlayScenes['darkmoon'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512, 87*512 - this.pwVertical * 24576 + 128, 512, 512);
+				}
+			}
+		}
 
 		// Stars
 		renderStars(this.ctx, this.seed, this.ngPlusCount, this.pw, this.pwVertical);
@@ -2735,26 +2781,12 @@ export const app = {
 
 						const px = p.x - (pwX * 512 * getWorldSize(this.isNGP, this.gameMode)) + getWorldCenter(this.isNGP, this.gameMode) * 512 + shiftX;
 						const py = p.y + 14 * 512 - (pwY * 24576) + shiftY; // Shift already baked into the tile spawns
-						let tempRadius = POI_RADIUS;
-						if (p.type === 'enemies' || p.type === 'props') {
-							tempRadius /= 2.0;
-							for (let item of p.items) {
-								if (item.type === 'wand') {
-									tempRadius = POI_RADIUS;
-									break;
-								}
-							}
-						}
+						let tempRadius = getPoiRadius(p, this.cam.z);
 						if (p.highlight === true) {
 							this.ctx.strokeStyle = '#000000AA';
-							this.ctx.lineWidth = 20 / this.cam.z;
-							if (this.ctx.lineWidth < 4) this.ctx.lineWidth = 4;
-							tempRadius = POI_RADIUS / this.cam.z; // Scale highlight with zoom for better visibility
-							if (tempRadius < POI_RADIUS) tempRadius = POI_RADIUS;
 						}
 						else {
 							this.ctx.strokeStyle = '#000000AA';
-							this.ctx.lineWidth = 4;
 						}
 
 						this.ctx.beginPath();
@@ -2764,7 +2796,6 @@ export const app = {
 						}
 						if (document.getElementById('accessibility-mode').checked) {
 							// Shapes for accessibility mode
-							tempRadius *= 1.5; // Scale up for better visibility
 							switch (p.type) {
 								case 'wand':
 									// Tall rectangle
@@ -2773,38 +2804,34 @@ export const app = {
 								case 'item':
 									if (p.item) {
 										if (p.item.includes('heart') || p.item === 'full_heal') {
-											// Heart shape (not great curves but meh)
-											this.ctx.moveTo(px, py - tempRadius / 3);
-											this.ctx.bezierCurveTo(px - tempRadius, py - tempRadius, px - tempRadius, py + tempRadius / 3, px, py + tempRadius);
-											this.ctx.bezierCurveTo(px + tempRadius, py + tempRadius / 3, px + tempRadius, py - tempRadius, px, py - tempRadius / 3);
-											this.ctx.closePath();
+											if (document.getElementById('debug-simple-poi-symbols').checked) {
+												this.ctx.moveTo(px - tempRadius, py - tempRadius);
+												this.ctx.lineTo(px + tempRadius, py - tempRadius);
+												this.ctx.lineTo(px, py + tempRadius);
+												this.ctx.closePath();
+											} else {
+												this.ctx.moveTo(px, py - tempRadius / 3);
+												this.ctx.bezierCurveTo(px - tempRadius, py - tempRadius, px - tempRadius, py + tempRadius / 3, px, py + tempRadius);
+												this.ctx.bezierCurveTo(px + tempRadius, py + tempRadius / 3, px + tempRadius, py - tempRadius, px, py - tempRadius / 3);
+												this.ctx.closePath();
+											}
 										}
 										else if (MATERIAL_CONTAINER_TYPES.includes(p.item)) {
-											// Flask with a narrow neck and rounded body
-											this.ctx.moveTo(px - tempRadius * 0.28, py - tempRadius);
-											this.ctx.lineTo(px + tempRadius * 0.28, py - tempRadius);
-											this.ctx.lineTo(px + tempRadius * 0.28, py - tempRadius * 0.42);
-											this.ctx.bezierCurveTo(
-												px + tempRadius * 0.28, py - tempRadius * 0.16,
-												px + tempRadius * 0.86, py - tempRadius * 0.08,
-												px + tempRadius * 0.88, py + tempRadius * 0.48
-											);
-											this.ctx.bezierCurveTo(
-												px + tempRadius * 0.9, py + tempRadius * 0.83,
-												px + tempRadius * 0.48, py + tempRadius,
-												px, py + tempRadius
-											);
-											this.ctx.bezierCurveTo(
-												px - tempRadius * 0.48, py + tempRadius,
-												px - tempRadius * 0.9, py + tempRadius * 0.83,
-												px - tempRadius * 0.88, py + tempRadius * 0.48
-											);
-											this.ctx.bezierCurveTo(
-												px - tempRadius * 0.86, py - tempRadius * 0.08,
-												px - tempRadius * 0.28, py - tempRadius * 0.16,
-												px - tempRadius * 0.28, py - tempRadius * 0.42
-											);
-											this.ctx.closePath();
+											if (document.getElementById('debug-simple-poi-symbols').checked) {
+												this.ctx.moveTo(px, py - tempRadius);
+												this.ctx.lineTo(px + tempRadius, py + tempRadius);
+												this.ctx.lineTo(px - tempRadius, py + tempRadius);
+												this.ctx.closePath();
+											} else {
+												this.ctx.moveTo(px - tempRadius * 0.28, py - tempRadius);
+												this.ctx.lineTo(px + tempRadius * 0.28, py - tempRadius);
+												this.ctx.lineTo(px + tempRadius * 0.28, py - tempRadius * 0.42);
+												this.ctx.bezierCurveTo(px + tempRadius * 0.28, py - tempRadius * 0.16, px + tempRadius * 0.86, py - tempRadius * 0.08, px + tempRadius * 0.88, py + tempRadius * 0.48);
+												this.ctx.bezierCurveTo(px + tempRadius * 0.9, py + tempRadius * 0.83, px + tempRadius * 0.48, py + tempRadius, px, py + tempRadius);
+												this.ctx.bezierCurveTo(px - tempRadius * 0.48, py + tempRadius, px - tempRadius * 0.9, py + tempRadius * 0.83, px - tempRadius * 0.88, py + tempRadius * 0.48);
+												this.ctx.bezierCurveTo(px - tempRadius * 0.86, py - tempRadius * 0.08, px - tempRadius * 0.28, py - tempRadius * 0.16, px - tempRadius * 0.28, py - tempRadius * 0.42);
+												this.ctx.closePath();
+											}
 										}
 										else if (p.item === 'portal' || p.item === 'meditation_cube' || p.item === 'buried_eye_teleporter' || p.item === 'trailer_altar') {
 											// Pentagon
@@ -2886,6 +2913,7 @@ export const app = {
 						}
 						this.ctx.fillStyle = poiColor;
 						this.ctx.fill();
+						this.ctx.lineWidth = tempRadius * (p.highlight === true ? 0.4 : 0.08);
 						this.ctx.stroke();
 					}
 				}
@@ -3015,6 +3043,10 @@ export const app = {
 			customArt: document.getElementById('custom-art').checked,
 			enableStaticPixelScenes: document.getElementById('enable-static-pixel-scenes').value,
 			hidePois: document.getElementById('debug-hide-pois').checked,
+			poiScale: Number.parseFloat(document.getElementById('debug-poi-scale').value),
+			scalePoisWithZoom: document.getElementById('debug-pois-zoom').checked,
+			highlightPoiScale: Number.parseFloat(document.getElementById('debug-highlight-poi-scale').value),
+			scaleHighlightedPoisWithZoom: document.getElementById('debug-highlight-pois-zoom').checked,
 			originalBiomeMap: document.getElementById('debug-original-biome-map').checked,
 			enableEdgeNoise: document.getElementById('enable-edge-noise').checked,
 			blockEdgeSpawns: document.getElementById('debug-block-edge-spawns').checked,
@@ -3032,10 +3064,13 @@ export const app = {
 			//extraRerolls: parseInt(document.getElementById('debug-extra-rerolls').value),
 			//rngInfo: document.getElementById('debug-rng-info').checked,
 			accessibilityMode: document.getElementById('accessibility-mode').checked,
+			simplePoiSymbols: document.getElementById('debug-simple-poi-symbols').checked,
 			sunGem: appSettings.sunGem,
 			darksunGem: appSettings.darksunGem,
 			sunState: appSettings.sunState,
 			darksunState: appSettings.darksunState,
+			moonCorruptState: appSettings.moonCorruptState,
+			darkmoonCorruptState: appSettings.darkmoonCorruptState,
 		};
 		// Unlock settings
 		const unlockSettings = {};
@@ -3092,6 +3127,12 @@ export const app = {
 				document.getElementById('custom-art').checked = settings.customArt || false;
 				document.getElementById('enable-static-pixel-scenes').value = settings.enableStaticPixelScenes || 'none';
 				document.getElementById('debug-hide-pois').checked = settings.hidePois || false;
+				document.getElementById('debug-poi-scale').value = settings.poiScale || 1;
+				document.getElementById('debug-poi-scale-value').textContent = `${Number.parseFloat(document.getElementById('debug-poi-scale').value).toFixed(1)}x`;
+				document.getElementById('debug-pois-zoom').checked = settings.scalePoisWithZoom || false;
+				document.getElementById('debug-highlight-poi-scale').value = settings.highlightPoiScale || 1;
+				document.getElementById('debug-highlight-poi-scale-value').textContent = `${Number.parseFloat(document.getElementById('debug-highlight-poi-scale').value).toFixed(1)}x`;
+				document.getElementById('debug-highlight-pois-zoom').checked = settings.scaleHighlightedPoisWithZoom ?? true;
 				document.getElementById('debug-original-biome-map').checked = settings.originalBiomeMap || false;
 				document.getElementById('enable-edge-noise').checked = settings.enableEdgeNoise || false;
 				document.getElementById('debug-block-edge-spawns').checked = settings.blockEdgeSpawns || false;
@@ -3108,6 +3149,7 @@ export const app = {
 				//document.getElementById('debug-extra-rerolls').value = settings.extraRerolls || 0;
 				//document.getElementById('debug-rng-info').checked = settings.rngInfo || false;
 				document.getElementById('accessibility-mode').checked = settings.accessibilityMode || false;
+				document.getElementById('debug-simple-poi-symbols').checked = settings.simplePoiSymbols || false;
 				// Unlock settings
 				for (const unlock of Object.keys(UNLOCKABLES)) {
 					document.getElementById(`unlock-${unlock}`).checked = settings[`unlock_${unlock}`];

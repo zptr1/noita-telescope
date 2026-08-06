@@ -53,6 +53,7 @@
 
         .debug-opt { display: block; margin-top: 5px; cursor: pointer; user-select: none; font-size: 12px; text-align: left; }
         .debug-opt.hidden { display: none; }
+        .poi-scale-control label { display: flex; justify-content: space-between; }
 
         #regions-container { flex: 1; display: flex; flex-direction: column; min-height: 200px; margin-top: 10px; border-top: 1px solid #444; padding-top: 10px; }
         #regions-list { flex: 1; overflow-y: auto; border: 1px solid #333; background: #1a1a1a; padding: 5px; text-align: left;}
@@ -1164,6 +1165,7 @@
         <span class="debug-toggle" style="margin-top: 10px; border-top: 1px solid #444; padding-top: 10px;" title="Show or hide options which you probably will not need to enable for normal use">Debug Options...</span>
         <div id="debug-options">
             <label class="debug-opt" title="Accessibility mode"><input type="checkbox" id="accessibility-mode"> Accessibility Mode</label>
+            <label class="debug-opt" title="Use simple triangles for heart and potion PoI symbols in Accessibility Mode."><input type="checkbox" id="debug-simple-poi-symbols"> Simple PoI Symbols</label>
             <label class="debug-opt" title="Display approximate wand sprite rarity in PoIs."><input type="checkbox" id="show-wand-sprite-rarity" checked> Show Wand Sprite Rarity</label>
             <label class="debug-opt" title="There is a single *unique* pixel scene in the game, which is the Shrine pixel scene in the Collapsed Mines. Being unique, once you visit/load it, it permanently alters the spawn probability of other pixel scenes in the Collapsed Mines on your run. Only the Collapsed Mines version of this scene is unique, the Mines version is not. If the pixel scenes predicted for the Collapsed Mines are incorrect, it's probably because you need to toggle this setting."><input type="checkbox" id="visited-coalmine-alt-shrine"> Visited Collapsed Mine Shrine</label>
             <label class="debug-opt" title="Exclude Taikasauva Spawns from the map. Taikasauvas are a source of wands and spells, but they can be somewhat inconsistent because they have a tendency to randomly unload."><input type="checkbox" id="exclude-taikasauva"> Exclude Natural Taikasauva Spawns</label>
@@ -1179,6 +1181,16 @@
                 </select>
             </label>
             <label class="debug-opt" title="Hide PoI circles to show the underlying tile map more clearly"><input type="checkbox" id="debug-hide-pois"> Hide PoIs</label>
+            <div class="debug-opt poi-scale-control" title="Adjust the rendered size of normal points of interest.">
+                <label for="debug-poi-scale">Normal PoI Scale <output id="debug-poi-scale-value">1.0x</output></label>
+                <input type="range" id="debug-poi-scale" min="0.1" max="4" step="0.1" value="1">
+            </div>
+            <label class="debug-opt" title="Keep normal PoIs legible when zooming out."><input type="checkbox" id="debug-pois-zoom"> Scale Normal PoIs with Zoom</label>
+            <div class="debug-opt poi-scale-control" title="Adjust the rendered size of highlighted search-result points of interest.">
+                <label for="debug-highlight-poi-scale">Search Result Scale <output id="debug-highlight-poi-scale-value">1.0x</output></label>
+                <input type="range" id="debug-highlight-poi-scale" min="0.1" max="4" step="0.1" value="1">
+            </div>
+            <label class="debug-opt" title="Keep highlighted search-result PoIs legible when zooming out."><input type="checkbox" id="debug-highlight-pois-zoom" checked> Scale Search Results with Zoom</label>
             <label class="debug-opt" title="Show the colors from the original biome map as the background, instead of the recolored ones based on the average color of the backgrounds"><input type="checkbox" id="debug-original-biome-map"> Show Original Biome Map Colors</label>
             <label class="debug-opt" title="Edge noise is the wavy edge between chunks. Some spawns near the edges of biomes may be false positives or false negatives depending on whether or not they get culled by the edge noise, like for example if EDR protrudes into a biome and blocks a spawn. This feature hasn't been fully consistent with the game quite yet."><input type="checkbox" id="enable-edge-noise"> Render Edge Noise</label>
             <label class="debug-opt" title="Click somewhere on the map to show a local view of the edge noise at the pixel level. Colors of chunks are according to their chunk position ID value (0-3)."><input type="checkbox" id="debug-edge-noise"> Show Biome Edge Noise Debug</label>

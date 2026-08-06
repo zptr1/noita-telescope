@@ -337,6 +337,8 @@ export function addStaticPixelScenes(ws, ng, pwIndex, pwIndexVertical, biomeData
 		];
 
 		for (const splicedScene of splicedScenes) {
+			if (splicedScene.name === 'moon' && appSettings.sunState) continue; // Skip moon if sun is enabled
+			if (splicedScene.name === 'moon_dark' && appSettings.darksunState) continue; // Skip moon_dark if darksun is enabled
 			if (!splicedScene.inNGP && ng > 0) continue;
 			if (!splicedScene.inNightmare && isNightmare) continue;
 			if (pixelSceneOption === 'some' && !splicedScene.required) continue;
@@ -418,26 +420,26 @@ export function addStaticPixelScenes(ws, ng, pwIndex, pwIndexVertical, biomeData
 		newPois.push(generateGoodWand3(10084 + pwOffsetX, 4360));
 	}
 
-	if (ng === 0 && pwIndexVertical === 0) {
+	if (pwIndexVertical === 0) {
 		// Ocarina / Flute / Huilu
 		newPois.push(generateWandHuilu(-9985 + pwOffsetX, -6472));
 		newPois.push({type: 'shop', biome: 'ocarina', x: -9987 + pwOffsetX, y: -6400, items: [
-			{type: 'item', item: 'spell', spell: 'OCARINA_A', biome: 'ocarina', x: -10055, y: -6466},
-			{type: 'item', item: 'spell', spell: 'OCARINA_A', biome: 'ocarina', x: -10055, y: -6418},
-			{type: 'item', item: 'spell', spell: 'OCARINA_B', biome: 'ocarina', x: -10035, y: -6466},
-			{type: 'item', item: 'spell', spell: 'OCARINA_B', biome: 'ocarina', x: -10035, y: -6418},
-			{type: 'item', item: 'spell', spell: 'OCARINA_C', biome: 'ocarina', x: -10015, y: -6466},
-			{type: 'item', item: 'spell', spell: 'OCARINA_C', biome: 'ocarina', x: -10015, y: -6418},
-			{type: 'item', item: 'spell', spell: 'OCARINA_D', biome: 'ocarina', x: -9995, y: -6466},
-			{type: 'item', item: 'spell', spell: 'OCARINA_D', biome: 'ocarina', x: -9995, y: -6418},
-			{type: 'item', item: 'spell', spell: 'OCARINA_E', biome: 'ocarina', x: -9975, y: -6466},
-			{type: 'item', item: 'spell', spell: 'OCARINA_E', biome: 'ocarina', x: -9975, y: -6418},
-			{type: 'item', item: 'spell', spell: 'OCARINA_F', biome: 'ocarina', x: -9955, y: -6466},
-			{type: 'item', item: 'spell', spell: 'OCARINA_F', biome: 'ocarina', x: -9955, y: -6418},
-			{type: 'item', item: 'spell', spell: 'OCARINA_GSHARP', biome: 'ocarina', x: -9935, y: -6466},
-			{type: 'item', item: 'spell', spell: 'OCARINA_GSHARP', biome: 'ocarina', x: -9935, y: -6418},
-			{type: 'item', item: 'spell', spell: 'OCARINA_A2', biome: 'ocarina', x: -9915, y: -6466},
-			{type: 'item', item: 'spell', spell: 'OCARINA_A2', biome: 'ocarina', x: -9915, y: -6418},
+			{type: 'item', item: 'spell', spell: 'OCARINA_A', biome: 'ocarina', x: -10055 + pwOffsetX, y: -6466},
+			{type: 'item', item: 'spell', spell: 'OCARINA_A', biome: 'ocarina', x: -10055 + pwOffsetX, y: -6418},
+			{type: 'item', item: 'spell', spell: 'OCARINA_B', biome: 'ocarina', x: -10035 + pwOffsetX, y: -6466},
+			{type: 'item', item: 'spell', spell: 'OCARINA_B', biome: 'ocarina', x: -10035 + pwOffsetX, y: -6418},
+			{type: 'item', item: 'spell', spell: 'OCARINA_C', biome: 'ocarina', x: -10015 + pwOffsetX, y: -6466},
+			{type: 'item', item: 'spell', spell: 'OCARINA_C', biome: 'ocarina', x: -10015 + pwOffsetX, y: -6418},
+			{type: 'item', item: 'spell', spell: 'OCARINA_D', biome: 'ocarina', x: -9995 + pwOffsetX, y: -6466},
+			{type: 'item', item: 'spell', spell: 'OCARINA_D', biome: 'ocarina', x: -9995 + pwOffsetX, y: -6418},
+			{type: 'item', item: 'spell', spell: 'OCARINA_E', biome: 'ocarina', x: -9975 + pwOffsetX, y: -6466},
+			{type: 'item', item: 'spell', spell: 'OCARINA_E', biome: 'ocarina', x: -9975 + pwOffsetX, y: -6418},
+			{type: 'item', item: 'spell', spell: 'OCARINA_F', biome: 'ocarina', x: -9955 + pwOffsetX, y: -6466},
+			{type: 'item', item: 'spell', spell: 'OCARINA_F', biome: 'ocarina', x: -9955 + pwOffsetX, y: -6418},
+			{type: 'item', item: 'spell', spell: 'OCARINA_GSHARP', biome: 'ocarina', x: -9935 + pwOffsetX, y: -6466},
+			{type: 'item', item: 'spell', spell: 'OCARINA_GSHARP', biome: 'ocarina', x: -9935 + pwOffsetX, y: -6418},
+			{type: 'item', item: 'spell', spell: 'OCARINA_A2', biome: 'ocarina', x: -9915 + pwOffsetX, y: -6466},
+			{type: 'item', item: 'spell', spell: 'OCARINA_A2', biome: 'ocarina', x: -9915 + pwOffsetX, y: -6418},
 		]});
 	}
 
