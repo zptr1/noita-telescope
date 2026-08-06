@@ -289,10 +289,10 @@ export function prescanSpawnFunctions(tileLayers, isNGP, gameMode='normal') {
                 if (index !== null) {
                     const coords = tileToWorldCoordinates(layer.minX, layer.minY, x, y - 4, 0, 0, isNGP, gameMode);
 
-                    // Only keep spawn pixels that land inside a chunk for both this position and the scan grid position
-                    // This helps with some false positives for edge noise
-                    if (!passesSpawnChunkGate(coords.x, coords.y, isNGP, gameMode)) continue;
-
+                    // Don't gate here: this prescan is PW0-only, but the NG+ stride
+                    // gives each parallel world a different sub-chunk phase, so a PW0
+                    // seam artifact can be a real spawn elsewhere. scanSpawnFunctions
+                    // re-gates every spawn in its own PW frame (== PW0 for NG0).
                     detectedSpawns.push({
                         sourceBiome,
                         x: coords.x, // Note: PW0
