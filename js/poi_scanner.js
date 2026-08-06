@@ -331,7 +331,12 @@ export function scanSpawnFunctions(biomeData, tileSpawns, worldSeed, ngPlusCount
     let detectedSpawns = tileSpawns.map(spawn => ({...spawn, fromPixelScene: false,
         x: spawn.x + pwIndex*getWorldSize(ngPlusCount > 0, gameMode) * 512 - ((ngPlusCount > 0 || gameMode === 'nightmare') ? 8 * pwIndex : 0),
         y: spawn.y + pwIndexVertical*24570
-    }));
+    }))
+    // The prescan gate ran in main-world coordinates, but the NG+ parallel world
+    // stride is 8px short of a whole chunk, so the offset above shifts spawns
+    // relative to the chunk grid. A spawn sitting just inside a chunk in the main
+    // world can end up outside one several parallel worlds over, so re-check it.
+    .filter(spawn => passesSpawnChunkGate(spawn.x, spawn.y, ngPlusCount > 0, gameMode));
     let generatedSpawns = [];
 
     let finalPixelScenes = [];
