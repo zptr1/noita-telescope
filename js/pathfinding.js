@@ -30,26 +30,34 @@ export function getPathStartSegment(bbox, width, height, wangFile, isNGPlus, gam
     return { x: startX, len: Math.trunc(segLen / 10) };
 }
 
+// Tiles a path may run through.
+function isOpen(pixels, idx) {
+    const color = (pixels[idx] << 16) | (pixels[idx + 1] << 8) | pixels[idx + 2];
+    return color === 0x000000 || color === 0xc0ffee;
+}
+
+// Maximal runs of open tiles along a row, as {x, len}.
 function findSequences(pixels, width, rowY, stride) {
     const seqs = [];
     let start = null;
     const rowOffset = rowY * width;
 
     for (let x = 0; x < width; x++) {
-        const idx = (rowOffset + x) * stride;
-        const isBlack = (pixels[idx] === 0 && pixels[idx+1] === 0 && pixels[idx+2] === 0);
-
-        if (isBlack) {
+        if (isOpen(pixels, (rowOffset + x) * stride)) {
             if (start === null) start = x;
         } else {
             if (start !== null) {
-                seqs.push([start, x - 1]);
+                seqs.push({ x: start, len: x - start });
                 start = null;
             }
         }
     }
-    if (start !== null) seqs.push([start, width - 1]);
+    if (start !== null) seqs.push({ x: start, len: width - start });
     return seqs;
+}
+
+function midpoint(seq) {
+    return seq.x + Math.trunc(seq.len / 2);
 }
 
 export function findMinPath(pixels, width, height, startSegment) {
@@ -57,23 +65,17 @@ export function findMinPath(pixels, width, height, startSegment) {
     let startY = 4;
     let topSequences = [];
 
-    if (startSegment) {
-        // Forced start, whether or not that tile ended up open.
-        const startX = startSegment.x + Math.trunc(startSegment.len / 2);
-        topSequences.push([startX, startX]);
-    } else {
-        topSequences = findSequences(pixels, width, startY, stride);
-    }
-
+    // Forced start, whether or not that tile ended up open.
+    topSequences = startSegment ? [startSegment] : findSequences(pixels, width, startY, stride);
     if (topSequences.length === 0) return null;
 
-    //const bottomSequences = findSequences(pixels, width, height - 1, stride);
-    //if (bottomSequences.length === 0) return null;
+    const bottomSequences = findSequences(pixels, width, height - 1, stride);
+    if (bottomSequences.length === 0) return null;
 
     const directions = [[0, 1], [-1, 0], [1, 0], [0, -1]];
 
     for (const startSeq of topSequences) {
-        const startX = Math.floor((startSeq[0] + startSeq[1]) / 2);
+        const startX = midpoint(startSeq);
         if (startX < 0 || startX >= width) continue;
 
         const visited = new Uint8Array(width * height);
@@ -85,17 +87,11 @@ export function findMinPath(pixels, width, height, startSegment) {
         visited[startY * width + startX] = 1;
         parents[startY * width + startX] = -2;
 
-        let found = false;
-        let finalNode = null;
+        let maxY = startY;
 
         while (queue.length > 0) {
             const curr = queue.shift();
-
-            if (curr.y === height - 1) {
-                found = true;
-                finalNode = curr;
-                break;
-            }
+            if (curr.y > maxY) maxY = curr.y;
 
             for (const [dx, dy] of directions) {
                 const nx = curr.x + dx;
@@ -103,33 +99,39 @@ export function findMinPath(pixels, width, height, startSegment) {
 
                 if (nx >= 0 && nx < width && ny > 3 && ny < height) {
                     const nIdx = ny * width + nx;
-                    if (visited[nIdx] === 0) {
-                        const pIdx = nIdx * stride;
-                        const pixelColor = (pixels[pIdx] << 16) | (pixels[pIdx+1] << 8) | pixels[pIdx+2];
-                        if ((pixelColor === 0x000000) || (pixelColor === 0xc0ffee) || (pixelColor === 0x8aff80)) {
-                            visited[nIdx] = 1;
-                            parents[nIdx] = curr.y * width + curr.x;
-                            queue.push({x: nx, y: ny});
-                        }
+                    if (visited[nIdx] === 0 && isOpen(pixels, nIdx * stride)) {
+                        visited[nIdx] = 1;
+                        parents[nIdx] = curr.y * width + curr.x;
+                        queue.push({x: nx, y: ny});
                     }
                 }
             }
         }
 
-        if (found) {
-            const path = [];
-            let currIdx = finalNode.y * width + finalNode.x;
-            while (currIdx !== -2 && currIdx !== -1) {
-                const py = Math.floor(currIdx / width);
-                const px = currIdx % width;
-                path.push({x: px, y: py});
-
-                const pIdx = parents[currIdx];
-                if (pIdx === -2) break;
-                currIdx = pIdx;
+        // The path only counts if it reached an opening in the bottom row.
+        if (maxY < height - 1) continue;
+        let endIdx = -1;
+        for (const endSeq of bottomSequences) {
+            const endX = midpoint(endSeq);
+            if (endX >= 0 && endX < width && visited[(height - 1) * width + endX] === 1) {
+                endIdx = (height - 1) * width + endX;
+                break;
             }
-            return path.reverse();
         }
+        if (endIdx === -1) continue;
+
+        const path = [];
+        let currIdx = endIdx;
+        while (currIdx !== -2 && currIdx !== -1) {
+            const py = Math.floor(currIdx / width);
+            const px = currIdx % width;
+            path.push({x: px, y: py});
+
+            const pIdx = parents[currIdx];
+            if (pIdx === -2) break;
+            currIdx = pIdx;
+        }
+        return path.reverse();
     }
     return null;
 }
