@@ -28,8 +28,7 @@ export function spawnChest(ws, ng, x, y, isTower=false, perks={}, gameMode='norm
 export function generateGreatChest(ws, ng, x, y, perks={}, gameMode='normal') {
 	const prng = new NollaPrng(0);
 	const noMoreShuffle = perks['noMoreShuffle'] || false;
-	x = roundRNGPos(x);
-	prng.SetRandomSeed(ws + ng, x, y);
+	prng.SetRandomSeed(ws + ng, roundRNGPos(x), y);
 	let items = [];
 	let count = 1;
 
@@ -275,9 +274,7 @@ export function generateGreatChestStandalone(seed) {
 export function generateChest(ws, ng, x, y, perks={}, gameMode='normal') {
 	const noMoreShuffle = perks['noMoreShuffle'] || false;
 	const prng = new NollaPrng(0);
-	x = roundRNGPos(x);
-	//prng.SetRandomSeed(ws+ng, roundRNGPos(x) + 509.7, y + 683.1);
-	prng.SetRandomSeed(ws + ng, x + 509.7, y + 683.1);
+	prng.SetRandomSeed(ws + ng, roundRNGPos(x) + 509.7, y + 683.1);
 	let items = [];
 	let count = 1;
 	while (count > 0) {
