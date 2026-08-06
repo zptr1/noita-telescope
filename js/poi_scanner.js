@@ -289,10 +289,10 @@ export function prescanSpawnFunctions(tileLayers, isNGP, gameMode='normal') {
                 if (index !== null) {
                     const coords = tileToWorldCoordinates(layer.minX, layer.minY, x, y - 4, 0, 0, isNGP, gameMode);
 
-                    // Only keep spawn pixels that land inside a chunk for both this position and the scan grid position
-                    // This helps with some false positives for edge noise
-                    if (!passesSpawnChunkGate(coords.x, coords.y, isNGP, gameMode)) continue;
-
+                    // Don't gate here: this prescan is PW0-only, but the NG+ stride
+                    // gives each parallel world a different sub-chunk phase, so a PW0
+                    // seam artifact can be a real spawn elsewhere. scanSpawnFunctions
+                    // re-gates every spawn in its own PW frame (== PW0 for NG0).
                     detectedSpawns.push({
                         sourceBiome,
                         x: coords.x, // Note: PW0
@@ -331,7 +331,12 @@ export function scanSpawnFunctions(biomeData, tileSpawns, worldSeed, ngPlusCount
     let detectedSpawns = tileSpawns.map(spawn => ({...spawn, fromPixelScene: false,
         x: spawn.x + pwIndex*getWorldSize(ngPlusCount > 0, gameMode) * 512 - ((ngPlusCount > 0 || gameMode === 'nightmare') ? 8 * pwIndex : 0),
         y: spawn.y + pwIndexVertical*24570
-    }));
+    }))
+    // The prescan gate ran in main-world coordinates, but the NG+ parallel world
+    // stride is 8px short of a whole chunk, so the offset above shifts spawns
+    // relative to the chunk grid. A spawn sitting just inside a chunk in the main
+    // world can end up outside one several parallel worlds over, so re-check it.
+    .filter(spawn => passesSpawnChunkGate(spawn.x, spawn.y, ngPlusCount > 0, gameMode));
     let generatedSpawns = [];
 
     let finalPixelScenes = [];
