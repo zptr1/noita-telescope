@@ -1837,66 +1837,81 @@ export const app = {
 		ctxHell.putImageData(hellData, 0, 0);
 	},
 
+	async loadOverlaysToTarget(target, overlays) {
+		await Promise.allSettled(
+			Object.entries(overlays).map(async ([overlay, url]) => {
+				const bitmap = await loadPNGBitmap(url);
+				target[overlay] = bitmap;
+			})
+		);
+	},
+
 	async getSurfaceOverlays() {
 		// TODO: Instead of loading these all at once, we could load them only if that type of world was used
 		// These are low res so hopefully won't cause too much slowdown, if not we can look into streaming them in or something
 		// TODO: Add variants for PWs/NG+
 		// Going to use this mode when I don't need to modify the image data
-		this.surfaceOverlay = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay.png');
-		this.surfaceOverlayPW = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_pw.png');
-		this.surfaceOverlayPWAdditional = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_pw_addition.png');
-		this.skyOverlay = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay.png');
-		this.skyOverlayPW = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_pw.png');
-		this.surfaceOverlayNGP = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_ngp.png');
-		this.surfaceOverlayNGPPW = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_ngp_pw.png');
-		this.skyOverlayNGP = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_ngp.png');
-		this.skyOverlayNGPPW = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_ngp_pw.png');
-		this.surfaceOverlayNGP7 = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_ngp7.png');
-		this.surfaceOverlayNGP7PW = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_ngp7_pw.png');
-		this.skyOverlayNGP7 = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_ngp7.png');
-		this.skyOverlayNGP7PW = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_ngp7_pw.png');
-		this.surfaceOverlayNGP14 = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_ngp14.png');
-		this.surfaceOverlayNGP14PW = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_ngp14_pw.png');
-		this.skyOverlayNGP14 = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_ngp14.png');
-		this.skyOverlayNGP14PW = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_ngp14_pw.png');
-		this.surfaceOverlayNGP21 = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_ngp21.png');
-		this.surfaceOverlayNGP21PW = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_ngp21_pw.png');
-		this.skyOverlayNGP21 = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_ngp21.png');
-		this.skyOverlayNGP21PW = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_ngp21_pw.png');
-		this.surfaceOverlayNightmare = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_nightmare.png');
-		this.surfaceOverlayNightmarePW = await loadPNGBitmap('../data/biome_maps/custom/surface_overlay_nightmare_pw.png');
-		this.skyOverlayNightmare = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_nightmare.png');
-		this.skyOverlayNightmarePW = await loadPNGBitmap('../data/biome_maps/custom/sky_overlay_nightmare_pw.png');
+
+		this.surfaceOverlayScenes = {};
+		this.weatherOverlays = {};
+
+		await this.loadOverlaysToTarget(app, {
+			surfaceOverlay: '../data/biome_maps/custom/surface_overlay.png',
+			surfaceOverlayPW: '../data/biome_maps/custom/surface_overlay_pw.png',
+			surfaceOverlayPWAdditional: '../data/biome_maps/custom/surface_overlay_pw_addition.png',
+			skyOverlay: '../data/biome_maps/custom/sky_overlay.png',
+			skyOverlayPW: '../data/biome_maps/custom/sky_overlay_pw.png',
+			surfaceOverlayNGP: '../data/biome_maps/custom/surface_overlay_ngp.png',
+			surfaceOverlayNGPPW: '../data/biome_maps/custom/surface_overlay_ngp_pw.png',
+			skyOverlayNGP: '../data/biome_maps/custom/sky_overlay_ngp.png',
+			skyOverlayNGPPW: '../data/biome_maps/custom/sky_overlay_ngp_pw.png',
+			surfaceOverlayNGP7: '../data/biome_maps/custom/surface_overlay_ngp7.png',
+			surfaceOverlayNGP7PW: '../data/biome_maps/custom/surface_overlay_ngp7_pw.png',
+			skyOverlayNGP7: '../data/biome_maps/custom/sky_overlay_ngp7.png',
+			skyOverlayNGP7PW: '../data/biome_maps/custom/sky_overlay_ngp7_pw.png',
+			surfaceOverlayNGP14: '../data/biome_maps/custom/surface_overlay_ngp14.png',
+			surfaceOverlayNGP14PW: '../data/biome_maps/custom/surface_overlay_ngp14_pw.png',
+			skyOverlayNGP14: '../data/biome_maps/custom/sky_overlay_ngp14.png',
+			skyOverlayNGP14PW: '../data/biome_maps/custom/sky_overlay_ngp14_pw.png',
+			surfaceOverlayNGP21: '../data/biome_maps/custom/surface_overlay_ngp21.png',
+			surfaceOverlayNGP21PW: '../data/biome_maps/custom/surface_overlay_ngp21_pw.png',
+			skyOverlayNGP21: '../data/biome_maps/custom/sky_overlay_ngp21.png',
+			skyOverlayNGP21PW: '../data/biome_maps/custom/sky_overlay_ngp21_pw.png',
+			surfaceOverlayNightmare: '../data/biome_maps/custom/surface_overlay_nightmare.png',
+			surfaceOverlayNightmarePW: '../data/biome_maps/custom/surface_overlay_nightmare_pw.png',
+			skyOverlayNightmare: '../data/biome_maps/custom/sky_overlay_nightmare.png',
+			skyOverlayNightmarePW: '../data/biome_maps/custom/sky_overlay_nightmare_pw.png',
+		});
+
+		await this.loadOverlaysToTarget(this.surfaceOverlayScenes, {
+			hiisi_hourglass_left: '../data/biome_maps/custom/hiisi_hourglass_left.png',
+			hiisi_hourglass_right: '../data/biome_maps/custom/hiisi_hourglass_right.png',
+			orb_room: '../data/biome_maps/custom/orb_room.png',
+			cursed_orb_room: '../data/biome_maps/custom/cursed_orb_room.png',
+			echoing_spire: '../data/biome_maps/custom/echoing_spire.png',
+			echoing_spire_grass: '../data/biome_maps/custom/echoing_spire_grass.png',
+			echoing_spire_sand: '../data/biome_maps/custom/echoing_spire_sand.png',
+			cauldron_room: '../data/biome_maps/custom/cauldron_room.png',
+			cauldron_room_broken: '../data/biome_maps/custom/cauldron_room_broken.png',
+			moon: '../data/biome_maps/custom/moon.png',
+			darkmoon: '../data/biome_maps/custom/darkmoon.png',
+			scale_empty: '../data/biome_maps/custom/scale_empty.png',
+			scale_light: '../data/biome_maps/custom/scale_light.png',
+			scale_dark: '../data/biome_maps/custom/scale_dark.png',
+			scale_balanced: '../data/biome_maps/custom/scale_balanced.png',
+			sun: '../data/biome_maps/custom/sun.png',
+			darksun: '../data/biome_maps/custom/darksun.png',
+		});
 		
-		this.surfaceOverlayScenes = {
-			"hiisi_hourglass_left": await loadPNGBitmap('../data/biome_maps/custom/hiisi_hourglass_left.png'),
-			"hiisi_hourglass_right": await loadPNGBitmap('../data/biome_maps/custom/hiisi_hourglass_right.png'),
-			"orb_room": await loadPNGBitmap('../data/biome_maps/custom/orb_room.png'),
-			"cursed_orb_room": await loadPNGBitmap('../data/biome_maps/custom/cursed_orb_room.png'),
-			"echoing_spire": await loadPNGBitmap('../data/biome_maps/custom/echoing_spire.png'),
-			"echoing_spire_grass": await loadPNGBitmap('../data/biome_maps/custom/echoing_spire_grass.png'),
-			"echoing_spire_sand": await loadPNGBitmap('../data/biome_maps/custom/echoing_spire_sand.png'),
-			"cauldron_room": await loadPNGBitmap('../data/biome_maps/custom/cauldron_room.png'),
-			"cauldron_room_broken": await loadPNGBitmap('../data/biome_maps/custom/cauldron_room_broken.png'),
-			"moon": await loadPNGBitmap('../data/biome_maps/custom/moon.png'),
-			"darkmoon": await loadPNGBitmap('../data/biome_maps/custom/darkmoon.png'),
-			"scale_empty": await loadPNGBitmap('../data/biome_maps/custom/scale_empty.png'),
-			"scale_light": await loadPNGBitmap('../data/biome_maps/custom/scale_light.png'),
-			"scale_dark": await loadPNGBitmap('../data/biome_maps/custom/scale_dark.png'),
-			"scale_balanced": await loadPNGBitmap('../data/biome_maps/custom/scale_balanced.png'),
-			"sun": await loadPNGBitmap('../data/biome_maps/custom/sun.png'),
-			"darksun": await loadPNGBitmap('../data/biome_maps/custom/darksun.png'),
-		};
-		
-		this.weatherOverlays = {
-			"rain": await loadPNGBitmap('../data/biome_maps/custom/weather_rain.png'),
-			"rain_heavy": await loadPNGBitmap('../data/biome_maps/custom/weather_rain_heavy.png'),
-			"snow": await loadPNGBitmap('../data/biome_maps/custom/weather_snow.png'),
-			"slush": await loadPNGBitmap('../data/biome_maps/custom/weather_slush.png'),
-			"blood": await loadPNGBitmap('../data/biome_maps/custom/weather_blood.png'),
-			"acid": await loadPNGBitmap('../data/biome_maps/custom/weather_acid.png'),
-			"slime": await loadPNGBitmap('../data/biome_maps/custom/weather_slime.png'),
-		};
+		await this.loadOverlaysToTarget(this.weatherOverlays, {
+			rain: '../data/biome_maps/custom/weather_rain.png',
+			rain_heavy: '../data/biome_maps/custom/weather_rain_heavy.png',
+			snow: '../data/biome_maps/custom/weather_snow.png',
+			slush: '../data/biome_maps/custom/weather_slush.png',
+			blood: '../data/biome_maps/custom/weather_blood.png',
+			acid: '../data/biome_maps/custom/weather_acid.png',
+			slime: '../data/biome_maps/custom/weather_slime.png',
+		});
 	},
 
 	getViewArea() {
