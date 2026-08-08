@@ -41,21 +41,84 @@ function getPoiRadius(poi, zoom) {
 		}
 	}
 
-	const isHighlighted = poi.highlight === true;
-	const scaleInput = document.getElementById(isHighlighted ? 'debug-highlight-poi-scale' : 'debug-poi-scale');
-	const zoomInput = document.getElementById(isHighlighted ? 'debug-highlight-pois-zoom' : 'debug-pois-zoom');
-	const scaleFactor = Number.parseFloat(scaleInput?.value) || 1;
-	if (zoomInput?.checked) {
+	const isHighlighted = poi.highlight;
+	const zoomInput = isHighlighted ? app.settings.scaleHighlightedPoisWithZoom : app.settings.scalePoisWithZoom;
+
+	if (zoomInput) {
 		radius = POI_RADIUS / zoom;
 		// It's way too big when zoomed
 		radius *= 0.25;
 	}
+
 	if (isHighlighted) {
-		radius *= 3.0; // Highlighted POIs are bigger
+		// Highlighted POIs are bigger
+		radius = radius * 3.0 * app.settings.highlightPoiScale;
+	} else {
+		radius *= app.settings.poiScale;
 	}
-	return radius * scaleFactor;
+
+	return radius;
 }
 
+// TODO: Probably not the best place for this, I'm not sure where to put this (~yui)
+function getPoiColor(poi) {
+	let poiColor = '#FFFFFFAA'; // Default color for unknown PoIs
+	// If the wand has specific world data, use it for exact precision
+	switch (poi.type) {
+		case 'wand':
+			poiColor = '#00FFFFAA';
+			break;
+		case 'item':
+			if (poi.item) {
+				if (poi.item.includes('heart') || poi.item === 'full_heal') {
+					poiColor = '#FF0000AA';
+				}
+				else if (MATERIAL_CONTAINER_TYPES.includes(poi.item)) {
+					poiColor = '#0000FFAA';
+				}
+				else if (poi.item === 'portal' || poi.item === 'meditation_cube' || poi.item === 'buried_eye_teleporter' || poi.item === 'trailer_altar') {
+					poiColor = '#800080AA';
+				}
+				else if (poi.item === 'refresh_mimic' || poi.item === 'heart_mimic' || poi.item === 'mimic' || poi.item === 'chest_leggy' || poi.item === 'mimic_potion') {
+					poiColor = '#AAAAAAAA';
+				}
+				else {
+					poiColor = '#FFFF00AA';
+				}
+			}
+			break;
+		case 'utility_box':
+		case 'puzzle':
+		case 'vault_puzzle':
+			poiColor = '#FF00FFAA';
+			break;
+		case 'chest':
+		case 'pacifist_chest':
+			poiColor = '#FFA500AA';
+			break;
+		case 'great_chest':
+			poiColor = '#FF5500AA';
+			break;
+		case 'shop':
+		case 'eye_room':
+		case 'holy_mountain_shop':
+			poiColor = '#00FF00AA';
+			break;
+		case 'enemies':
+			poiColor = '#AAAAAAAA';
+			for (let item of poi.items) {
+				if (item.type === 'wand') {
+					poiColor = '#00FFFFAA';
+					break;
+				}
+			}
+			break;
+		// Add more cases as needed for different PoI types
+	}
+
+	poi.color = poiColor;
+	return poiColor;
+}
 
 export const app = {
 	// TODO: A lot of these are old and unused and could probably be cleaned up
@@ -1609,27 +1672,28 @@ export const app = {
 
 		// 2. SPAWN FUNCTION SCANNING
 
-		if (rescan || !this.pixelScenesByPW[`${this.pw},${this.pwVertical}`] || !this.poisByPW[`${this.pw},${this.pwVertical}`]) {
+		const pwKey = `${this.pw},${this.pwVertical}`;
+		if (rescan || !this.pixelScenesByPW[pwKey] || !this.poisByPW[pwKey]) {
 			const scanResults = scanSpawnFunctions(this.biomeData, this.tileSpawns, this.seed, this.ngPlusCount, this.pw, this.pwVertical, this.skipCosmeticScenes, this.perks, this.gameMode);
-			this.pixelScenesByPW[`${this.pw},${this.pwVertical}`] = scanResults.finalPixelScenes;
+			this.pixelScenesByPW[pwKey] = scanResults.finalPixelScenes;
 			const specialPoIs = getSpecialPoIs(this.biomeData, this.seed, this.ngPlusCount, this.pw, this.pwVertical, this.perks, this.gameMode);
-			this.poisByPW[`${this.pw},${this.pwVertical}`] = scanResults.generatedSpawns.concat(specialPoIs);
+			this.poisByPW[pwKey] = scanResults.generatedSpawns.concat(specialPoIs);
 		
 			// Static pixel scenes
 			if (document.getElementById('enable-static-pixel-scenes').value !== 'off') {
 				const staticPixelScenesResults = addStaticPixelScenes(this.seed, this.ngPlusCount, this.pw, this.pwVertical, this.biomeData, this.skipCosmeticScenes, this.perks, this.isDaily, this.gameMode);
-				this.pixelScenesByPW[`${this.pw},${this.pwVertical}`] = this.pixelScenesByPW[`${this.pw},${this.pwVertical}`].concat(staticPixelScenesResults.pixelScenes);
-				this.poisByPW[`${this.pw},${this.pwVertical}`] = this.poisByPW[`${this.pw},${this.pwVertical}`].concat(staticPixelScenesResults.pois);
+				this.pixelScenesByPW[pwKey] = this.pixelScenesByPW[pwKey].concat(staticPixelScenesResults.pixelScenes);
+				this.poisByPW[pwKey] = this.poisByPW[pwKey].concat(staticPixelScenesResults.pois);
 			}
 
 			// Make sure the search worker is synced with this update
 			continueSearchSequence(this.pw, this.pwVertical)
 			// Synchronously recolor pixel scenes in this world
-			recolorPixelScenes(this.pixelScenesByPW[`${this.pw},${this.pwVertical}`]);
+			recolorPixelScenes(this.pixelScenesByPW[pwKey]);
 		}
 
 		// Debug: Show example JSON output
-		//console.log(this.poisByPW[`${this.pw},${this.pwVertical}`]);
+		//console.log(this.poisByPW[pwKey]);
 
 		// Generate eye messages
 		if (tiles) {
@@ -1999,11 +2063,15 @@ export const app = {
 			worldOffsets[worldKey] = { pwX, pwY, shiftX, shiftY };
 		}
 
+		const worldCenter = getWorldCenter(this.isNGP, this.gameMode);
+		const worldSize = getWorldSize(this.isNGP, this.gameMode);
+
 		// Layer 1
 		// Background biome colors
+
 		for (let worldKey of this.worldsInView) {
 			const { pwX, pwY, shiftX, shiftY } = worldOffsets[worldKey];
-			if (document.getElementById('debug-original-biome-map').checked) {
+			if (this.settings.originalBiomeMap) {
 				if (pwY === 0) {
 					this.ctx.drawImage(this.offscreen, shiftX, shiftY, this.w * 512, this.h * 512);
 				}
@@ -2199,36 +2267,15 @@ export const app = {
 				}
 			}
 		}
-
+		
 		// Weather overlays
-		if (document.getElementById('custom-art').checked && this.weatherOverlays) {
+		if (this.settings.customArt && this.weatherOverlays) {
 			// Only applies to main world, check whether the main world is in view
 			if (this.worldsInView.has('0,0')) {
-				const { shiftX, shiftY } = worldOffsets['0,0'];
-				let weatherOverlay;
-				if (this.weather.type === 'rain' && this.weatherOverlays['rain']) {
-					weatherOverlay = this.weatherOverlays['rain'];
-				}
-				else if (this.weather.type === 'rain_heavy' && this.weatherOverlays['rain_heavy']) {
-					weatherOverlay = this.weatherOverlays['rain_heavy'];
-				}
-				else if (this.weather.type === 'snow' && this.weatherOverlays['snow']) {
-					weatherOverlay = this.weatherOverlays['snow'];
-				}
-				else if (this.weather.type === 'slush' && this.weatherOverlays['slush']) {
-					weatherOverlay = this.weatherOverlays['slush'];
-				}
-				else if (this.weather.type === 'blood' && this.weatherOverlays['blood']) {
-					weatherOverlay = this.weatherOverlays['blood'];
-				}
-				else if (this.weather.type === 'acid' && this.weatherOverlays['acid']) {
-					weatherOverlay = this.weatherOverlays['acid'];
-				}
-				else if (this.weather.type === 'slime' && this.weatherOverlays['slime']) {
-					weatherOverlay = this.weatherOverlays['slime'];
-				}
+				let weatherOverlay = this.weatherOverlays[this.weather.type];
 				if (weatherOverlay) {
-					this.ctx.drawImage(weatherOverlay, shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 - 5*512, shiftY + 5*512 + 416, 283*32, 142*32);
+					const { shiftX, shiftY } = worldOffsets['0,0'];
+					this.ctx.drawImage(weatherOverlay, shiftX + worldCenter * 512 - 5*512, shiftY + 5*512 + 416, 283*32, 142*32);
 				}
 			}
 		}
@@ -2275,29 +2322,29 @@ export const app = {
 						// Scale variants based on sun/darksun gem unlocks
 						if (appSettings.sunGem && appSettings.darksunGem) {
 							if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_balanced']) {
-								this.ctx.drawImage(this.surfaceOverlayScenes['scale_balanced'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+								this.ctx.drawImage(this.surfaceOverlayScenes['scale_balanced'], shiftX + worldCenter * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
 							}
 						}
 						else if (appSettings.sunGem) {
 							if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_light']) {
-								this.ctx.drawImage(this.surfaceOverlayScenes['scale_light'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+								this.ctx.drawImage(this.surfaceOverlayScenes['scale_light'], shiftX + worldCenter * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
 							}
 						}
 						else if (appSettings.darksunGem) {
 							if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_dark']) {
-								this.ctx.drawImage(this.surfaceOverlayScenes['scale_dark'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+								this.ctx.drawImage(this.surfaceOverlayScenes['scale_dark'], shiftX + worldCenter * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
 							}
 						}
 						else {
 							if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_empty']) {
-								this.ctx.drawImage(this.surfaceOverlayScenes['scale_empty'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+								this.ctx.drawImage(this.surfaceOverlayScenes['scale_empty'], shiftX + worldCenter * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
 							}
 						}
 					}
 					else {
 						// Broken scale otherwise
 						if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['scale_empty']) {
-							this.ctx.drawImage(this.surfaceOverlayScenes['scale_empty'], shiftX + getWorldCenter(this.isNGP, this.gameMode) * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
+							this.ctx.drawImage(this.surfaceOverlayScenes['scale_empty'], shiftX + worldCenter * 512 + scaleOffsetX, shiftY + 14*512 + scaleOffsetY, 512, 512);
 						}
 					}
 				}
@@ -2307,25 +2354,25 @@ export const app = {
 		// Moons and Suns
 		if (appSettings.sunState) {
 			if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['sun']) {
-				this.ctx.drawImage(this.surfaceOverlayScenes['sun'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512 - 7.5*512, -37*512 - this.pwVertical * 24576 - 32 - 7.5*512, 16*512, 16*512);
+				this.ctx.drawImage(this.surfaceOverlayScenes['sun'], worldCenter * 512 - this.pw * worldSize * 512 - 7.5*512, -37*512 - this.pwVertical * 24576 - 32 - 7.5*512, 16*512, 16*512);
 			}
 		}
 		else {
 			if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['moon']) {
-				this.ctx.drawImage(this.surfaceOverlayScenes['moon'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512, -37*512 - this.pwVertical * 24576 - 32, 512, 540);
+				this.ctx.drawImage(this.surfaceOverlayScenes['moon'], worldCenter * 512 - this.pw * worldSize * 512, -37*512 - this.pwVertical * 24576 - 32, 512, 540);
 			}
 		}
 		if (this.gameMode !== 'nightmare') {
 			// Why is it not in Nightmare? So weird.
 			if (appSettings.darksunState) {
 				if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['darksun']) {
-					this.ctx.drawImage(this.surfaceOverlayScenes['darksun'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512 - 7.5*512, 87*512 - this.pwVertical * 24576 + 128 - 7.5*512, 16*512, 16*512);
+					this.ctx.drawImage(this.surfaceOverlayScenes['darksun'], worldCenter * 512 - this.pw * worldSize * 512 - 7.5*512, 87*512 - this.pwVertical * 24576 + 128 - 7.5*512, 16*512, 16*512);
 				}
 			}
 			else {
 				
 				if (this.surfaceOverlayScenes && this.surfaceOverlayScenes['darkmoon']) {
-					this.ctx.drawImage(this.surfaceOverlayScenes['darkmoon'], getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512, 87*512 - this.pwVertical * 24576 + 128, 512, 512);
+					this.ctx.drawImage(this.surfaceOverlayScenes['darkmoon'], worldCenter * 512 - this.pw * worldSize * 512, 87*512 - this.pwVertical * 24576 + 128, 512, 512);
 				}
 			}
 		}
@@ -2355,7 +2402,7 @@ export const app = {
 				for (let pwX = minPW; pwX <= maxPW; pwX++) {
 					for (let verticalSegment = minVerticalSegment; verticalSegment <= maxVerticalSegment; verticalSegment++) {
 						if (verticalSegment > 0 || verticalSegment < -pwX+1) continue;
-						const posX = (getWorldCenter(this.isNGP, this.gameMode) - 25) * 512 + pwX * 512 * this.w - this.pw * 512 * this.w;
+						const posX = (worldCenter - 25) * 512 + pwX * 512 * this.w - this.pw * 512 * this.w;
 						const posY = verticalSegment * 512 * 25 - 11*512 - this.pwVertical * 24576;
 						this.ctx.drawImage(echoingSpireScene, posX, posY, 512, 512*25);
 					}
@@ -2363,10 +2410,10 @@ export const app = {
 			}
 		}
 
-		const showBoxes = document.getElementById('debug-show-tile-bounds').checked;
-		const showPaths = document.getElementById('debug-show-path').checked;
+		const showBoxes = this.settings.showTileBounds;
+		const showPaths = this.settings.showPath;
 
-		const biomeOverlayMode = document.getElementById('debug-biome-overlay-mode').value;
+		const biomeOverlayMode = this.settings.overlayMode;
 
 		// TODO: Layer 3
 		// Tile background, needs to overwrite custom art in some places in NG+ based on a mask
@@ -2509,7 +2556,7 @@ export const app = {
 					for (let scene of this.pixelScenesByPW[`${pwX},${pwY}`]) {
 						//if (!scene || !scene.imgElement) continue;
 						// Note positions of these *do not* use the tile offset
-						const drawX = scene.x + getWorldCenter(this.isNGP, this.gameMode)*512 - pwX*getWorldSize(this.isNGP, this.gameMode)*512 + shiftX;
+						const drawX = scene.x + worldCenter*512 - pwX*worldSize*512 + shiftX;
 						const drawY = scene.y + 14*512 - pwY*24576 + shiftY;
 
 						// Cull offscreen scenes before getPixelSceneCanvas(), so scenes
@@ -2530,7 +2577,7 @@ export const app = {
 			}
 
 			// Orb rooms (effectively another pixel scene overlay)
-			this.biomeData.orbs.forEach(o => {
+			for (const o of this.biomeData.orbs) {
 				if (o.y < 14) return; // Skip the sky altar and pyramid top orbs
 
 				// Main world always renders orb rooms. For vertical worlds, only bottom-map
@@ -2540,7 +2587,7 @@ export const app = {
 				if (!renderHere) return;
 				const repeatCount = (pwY > 0 && isBottomMapChunkOrb) ? 48 : 1;
 
-				if (document.getElementById('custom-art').checked && this.surfaceOverlayScenes && this.surfaceOverlayScenes['orb_room']) {
+				if (customArt && this.surfaceOverlayScenes && this.surfaceOverlayScenes['orb_room']) {
 					// Technically always NGP the way I have this set up but whatever
 					const sceneName = (pwX === 0 && this.gameMode !== 'nightmare') ? 'orb_room' : 'cursed_orb_room';
 					for (let k = 0; k < repeatCount; k++) {
@@ -2568,7 +2615,7 @@ export const app = {
 						this.ctx.lineWidth = 10; this.ctx.fill(); this.ctx.stroke();
 					}
 				}
-			});
+			}
 		}
 
 		// Cauldron room should be on top of the biome data
@@ -2707,7 +2754,7 @@ export const app = {
 			
 			// The total width and height of the searched square
 			const size = r * 2;
-			const topLeftX = getWorldCenter(this.isNGP, this.gameMode) * 512 - this.pw * getWorldSize(this.isNGP, this.gameMode) * 512 + x - r;
+			const topLeftX = worldCenter * 512 - this.pw * worldSize * 512 + x - r;
 			const topLeftY = 14 * 512 - this.pwVertical * 48 * 512 + y - r;
 
 			// Draw a semi-transparent fill
@@ -2721,15 +2768,19 @@ export const app = {
 		}
 
 		// TODO: Check this with panning
-		if (document.getElementById('debug-edge-noise').checked && this.debugCanvas) {
-			this.ctx.drawImage(this.debugCanvas, this.debugX - this.debugCanvas.width/2 + getWorldCenter(this.isNGP, this.gameMode)*512, this.debugY - this.debugCanvas.height/2 + 14*512);
+		if (this.settings.edgeNoiseDebug && this.debugCanvas) {
+			this.ctx.drawImage(this.debugCanvas, this.debugX - this.debugCanvas.width/2 + worldCenter*512, this.debugY - this.debugCanvas.height/2 + 14*512);
 		}
 
 		// Layer 9
 		// PoIs
 
 		// Render PoIs
-		if (!document.getElementById('debug-hide-pois').checked) {
+		if (!this.settings.hidePois) {
+			const smallPois = this.settings.smallPois;
+			const accessibilityMode = this.settings.accessibilityMode;
+			const simplePoiSymbols = this.settings.simplePoiSymbols;
+
 			for (let worldKey of this.worldsInView) {
 				// Skip rendering PoIs when too zoomed out (helps with lag)
 				// Not really necessary with the speedups
@@ -2739,64 +2790,10 @@ export const app = {
 				if (currentPois) {
 					for (let p of currentPois) {
 						// Calculate visual position on the current map
-						
-						let poiColor = '#FFFFFFAA'; // Default color for unknown PoIs
-						// If the wand has specific world data, use it for exact precision
-						switch (p.type) {
-							case 'wand':
-								poiColor = '#00FFFFAA';
-								break;
-							case 'item':
-								if (p.item) {
-									if (p.item.includes('heart') || p.item === 'full_heal') {
-										poiColor = '#FF0000AA';
-									}
-									else if (MATERIAL_CONTAINER_TYPES.includes(p.item)) {
-										poiColor = '#0000FFAA';
-									}
-									else if (p.item === 'portal' || p.item === 'meditation_cube' || p.item === 'buried_eye_teleporter' || p.item === 'trailer_altar') {
-										poiColor = '#800080AA';
-									}
-									else if (p.item === 'refresh_mimic' || p.item === 'heart_mimic' || p.item === 'mimic' || p.item === 'chest_leggy' || p.item === 'mimic_potion') {
-										poiColor = '#AAAAAAAA';
-									}
-									else {
-										poiColor = '#FFFF00AA';
-									}
-								}
-								break;
-							case 'utility_box':
-							case 'puzzle':
-							case 'vault_puzzle':
-								poiColor = '#FF00FFAA';
-								break;
-							case 'chest':
-							case 'pacifist_chest':
-								poiColor = '#FFA500AA';
-								break;
-							case 'great_chest':
-								poiColor = '#FF5500AA';
-								break;
-							case 'shop':
-							case 'eye_room':
-							case 'holy_mountain_shop':
-								poiColor = '#00FF00AA';
-								break;
-							case 'enemies':
-								poiColor = '#AAAAAAAA';
-								for (let item of p.items) {
-									if (item.type === 'wand') {
-										poiColor = '#00FFFFAA';
-										break;
-									}
-								}
-								break;
-							// Add more cases as needed for different PoI types
-						}
 
-						const px = p.x - (pwX * 512 * getWorldSize(this.isNGP, this.gameMode)) + getWorldCenter(this.isNGP, this.gameMode) * 512 + shiftX;
+						const px = p.x - (pwX * 512 * worldSize) + worldCenter * 512 + shiftX;
 						const py = p.y + 14 * 512 - (pwY * 24576) + shiftY; // Shift already baked into the tile spawns
-						let tempRadius = getPoiRadius(p, this.cam.z);
+						let tempRadius = smallPois ? 5 : getPoiRadius(p, this.cam.z);
 						if (p.highlight === true) {
 							this.ctx.strokeStyle = '#000000AA';
 						}
@@ -2805,11 +2802,8 @@ export const app = {
 						}
 
 						this.ctx.beginPath();
-						
-						if (document.getElementById('debug-small-pois').checked) {
-							tempRadius = 5;
-						}
-						if (document.getElementById('accessibility-mode').checked) {
+
+						if (accessibilityMode) {
 							// Shapes for accessibility mode
 							switch (p.type) {
 								case 'wand':
@@ -2819,7 +2813,7 @@ export const app = {
 								case 'item':
 									if (p.item) {
 										if (p.item.includes('heart') || p.item === 'full_heal') {
-											if (document.getElementById('debug-simple-poi-symbols').checked) {
+											if (simplePoiSymbols) {
 												this.ctx.moveTo(px - tempRadius, py - tempRadius);
 												this.ctx.lineTo(px + tempRadius, py - tempRadius);
 												this.ctx.lineTo(px, py + tempRadius);
@@ -2832,7 +2826,7 @@ export const app = {
 											}
 										}
 										else if (MATERIAL_CONTAINER_TYPES.includes(p.item)) {
-											if (document.getElementById('debug-simple-poi-symbols').checked) {
+											if (simplePoiSymbols) {
 												this.ctx.moveTo(px, py - tempRadius);
 												this.ctx.lineTo(px + tempRadius, py + tempRadius);
 												this.ctx.lineTo(px - tempRadius, py + tempRadius);
@@ -2926,7 +2920,7 @@ export const app = {
 							// Colored circles
 							this.ctx.arc(px, py, tempRadius, 0, Math.PI * 2);
 						}
-						this.ctx.fillStyle = poiColor;
+						this.ctx.fillStyle = p.color || getPoiColor(p);
 						this.ctx.fill();
 						this.ctx.lineWidth = tempRadius * (p.highlight === true ? 0.4 : 0.08);
 						this.ctx.stroke();
@@ -3073,7 +3067,7 @@ export const app = {
 			enableHamisHints: document.getElementById('enable-hamis-hints').checked,
 			gameMode: document.getElementById('game-mode').value,
 			spellFlags: appSettings.spellFlags,
-			//smallPois: document.getElementById('debug-small-pois').checked,
+			smallPois: document.getElementById('debug-small-pois').checked,
 			//fixHolyMountainEdgeNoise: document.getElementById('debug-fix-holy-mountain-edge-noise').checked,
 			excludeEdgeCases: document.getElementById('exclude-edge-cases').checked,
 			//extraRerolls: parseInt(document.getElementById('debug-extra-rerolls').value),
@@ -3118,6 +3112,8 @@ export const app = {
 		}
 		localStorage.setItem('noitaTelescopeSettings', JSON.stringify(settings));
 		console.log("Settings saved.");
+
+		this.settings = settings;
 		//console.log(settings);
 	},
 
